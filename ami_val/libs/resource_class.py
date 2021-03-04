@@ -536,6 +536,15 @@ class EC2VM():
         self.log.info(volumes_list)
         return volumes_list
 
+    def get_cpu_count(self):
+        volumes_list = []
+        self.log.info("Try to get instance cpu count")
+        self.__ec2_instance.reload()
+        cpuinfo = self.__ec2_instance.cpu_options
+        cpucount = int(cpuinfo['CoreCount']) * int(cpuinfo['ThreadsPerCore'])
+        self.log.info("got {}".format(cpucount))
+        return cpucount
+
     def get_console_log(self):
         try:
             output = self.__ec2_instance.console_output(Latest=True).get('Output')

@@ -9,7 +9,7 @@ def test_stage1_check_bash_history(test_instance):
         cmd = 'sudo cat ~{}/.bash_history'.format(user)
         run_cmd(test_instance, cmd, expect_not_ret='0', msg='check bash history does not exist in fresh AMI')
 
-def test_stage1_check_cmdline_console(test_instance):
+def test_stage1_check_chrony_aws(test_instance):
     '''
     rhbz: 1679763 [RFE] AWS AMI - Add Amazon Timesync Service
     '''
@@ -21,6 +21,27 @@ def test_stage1_check_cmdline_console(test_instance):
     '''
     run_cmd(test_instance, "sudo cat /proc/cmdline", expect_ret=0, expect_kw='console=ttyS0', msg='check serial console is redirected to ttyS0')
 
+def test_stage1_check_cmdline_crashkernel(test_instance):
+    '''
+    crashkernel should be enabled in image
+    '''
+    run_cmd(test_instance, "sudo cat /proc/cmdline", expect_ret=0, expect_kw='crashkernel=auto', msg='check crashkernel is enabled')
+
+def test_stage1_check_cmdline_ifnames(test_instance):
+    '''
+    rhbz: 1859926
+    ifnames should be specified
+    https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/enhanced-networking-ena.html
+    '''
+    run_cmd(test_instance, "sudo cat /proc/cmdline", expect_ret=0, expect_kw='net.ifnames=0', msg='check ifnames is specified')
+
+def test_stage1_check_cmdline_nouveau(test_instance):
+    '''
+    rhbz: 1645772
+    nouveau should be disabled
+    '''
+    run_cmd(test_instance, "sudo cat /proc/cmdline", expect_ret=0, expect_kw='rd.blacklist=nouveau', msg='check nouveau is in blacklist')
+
 def test_stage1_check_cmdline_nvme_io_timeout(test_instance):
     '''
     rhbz: 1732506
@@ -30,6 +51,21 @@ def test_stage1_check_cmdline_nvme_io_timeout(test_instance):
     out = run_cmd(test_instance, 'sudo lsblk')
     if 'nvme' in out:
         run_cmd(test_instance, "sudo cat /sys/module/nvme_core/parameters/io_timeout", expect_ret=0, expect_kw='4294967295', msg='check actual value')
+
+def test_stage1_check_cmdline_rhgb_quiet(test_instance):
+    '''
+    rhbz: 1122300
+    check no "rhgb" and "quiet" in /proc/cmdline
+    '''
+    run_cmd(test_instance, "sudo cat /proc/cmdline", expect_ret=0, expect_not_kw='rhgb,quiet', msg='check no rhgb and quiet in boot cmd')
+
+def test_stage1_check_cpu_num(test_instance):
+    '''
+    check the number of cpu cores available
+    '''
+    cpucount = test_instance.vm.get_cpu_count()
+    cmd = "sudo cat /proc/cpuinfo | grep '^processor' | wc -l"
+    run_cmd(test_instance, cmd, expect_ret=0, expect_kw=str(cpucount), msg='check online cpu match spec define')
 
 def test_stage1_check_inittab(test_instance):
     '''
@@ -100,6 +136,19 @@ def test_stage1_check_shells(test_instance):
     Check for bash/nologin shells in /etc/shells
     """
     run_cmd(test_instance, 'sudo cat /etc/shells', expect_kw='/bin/bash', msg='check /bin/bash in /etc/shells')
+
+
+def test_stage1_check_sshd(test_instance):
+    '''
+    sshd service shoud be on, password authentication shoud be disabled
+    '''
+    is_systemd = run_cmd(test_instance, 'rpm -q systemd > /dev/null && echo True || echo False')
+    test_instance.log.info("Is systemd system:{}".format(is_systemd))
+    if 'True' in is_systemd:
+        cmd = 'sudo systemctl is-active sshd.service'
+        run_cmd(test_instance, cmd, expect_ret=0, msg='check if sshd active')
+    cmd = 'sudo cat /etc/ssh/sshd_config'
+    run_cmd(test_instance, cmd, expect_ret=0, expect_kw='PasswordAuthentication no', msg='check if password auth disabled')
 
 def test_stage1_check_timezone(test_instance):
     '''
