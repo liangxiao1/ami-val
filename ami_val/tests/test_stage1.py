@@ -2,7 +2,7 @@ import os
 import sys
 import time
 import json
-from ami_val.libs.utils_lib import run_cmd
+from ami_val.libs.utils_lib import run_cmd, is_arch
 
 def test_stage1_check_bash_history(test_instance):
     for user in ['ec2-user', 'root']:
@@ -59,6 +59,15 @@ def test_stage1_check_cmdline_rhgb_quiet(test_instance):
     '''
     run_cmd(test_instance, "sudo cat /proc/cmdline", expect_ret=0, expect_not_kw='rhgb,quiet', msg='check no rhgb and quiet in boot cmd')
 
+def test_stage1_check_cpu_flags(test_instance):
+    '''
+    rhbz: 1061348
+    check various cpu flags
+    '''
+    is_arch(test_instance, arch='x86_64', action='cancel')
+    cmd = "sudo lscpu"
+    run_cmd(test_instance, cmd, expect_ret=0, expect_kw='avx,xsave', msg='check avx and xsave flags')
+
 def test_stage1_check_cpu_num(test_instance):
     '''
     check the number of cpu cores available
@@ -88,6 +97,13 @@ def test_stage1_check_nameserver(test_instance):
     check if DNS resolving works
     '''
     run_cmd(test_instance, "ping -c 5 google-public-dns-a.google.com", expect_ret=0, msg='check if DNS resolving works')
+
+def test_stage1_check_no_avc_denials(test_instance):
+    '''
+    check there is no avc denials (selinux)
+    '''
+    cmd = "x=$(sudo ausearch -m avc 2>&1 &); echo $x"
+    run_cmd(test_instance, cmd, expect_kw='no matches', msg='check no avc denials')
 
 def test_stage1_check_pkg_signed(test_instance):
     '''

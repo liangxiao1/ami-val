@@ -66,7 +66,7 @@ def main():
     parser.add_argument('--profile', dest='profile', default='default', action='store',
                     help='aws credential profile name, default is default', required=False)
     parser.add_argument('--paralle', dest='is_paralle', action='store_true', default=False,
-                    help='Run tests in all regions in paralle', required=False)
+                    help='run tests in all regions in paralle', required=False)
     args = parser.parse_args()
 
     signal.signal(signal.SIGHUP, sig_handler)

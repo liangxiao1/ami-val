@@ -33,6 +33,24 @@ def test_stage3_check_yum_repoinfo(test_instance):
     cmd = "sudo yum repoinfo"
     run_cmd(test_instance, cmd, expect_ret=0, timeout=1200, msg='try to get repo info')
 
+
+def test_stage3_test_yum_package_install(test_instance):
+    if 'ATOMIC' in test_instance.info['name'].upper():
+        test_instance.skipTest('skip in Atomic AMIs')
+    run_cmd(test_instance, "sudo yum clean all", expect_ret=0, timeout=180)
+    run_cmd(test_instance, "sudo yum repolist", expect_ret=0, timeout=1200)
+    run_cmd(test_instance, "sudo yum check-update", timeout=1200)
+    run_cmd(test_instance, "sudo yum search zsh", expect_ret=0, timeout=180)
+    run_cmd(test_instance, "sudo yum -y install zsh", expect_ret=0, timeout=180)
+    run_cmd(test_instance, r"sudo rpm -q --queryformat '%{NAME}' zsh", expect_ret=0)
+    run_cmd(test_instance, "sudo rpm -e zsh", expect_ret=0)
+
+    if 'SAP' in test_instance.info['name'].upper() and '6.5' in test_instance.info['name']:
+        test_instance.log.info("Below is specified for SAP AMIs")
+        run_cmd(test_instance, "sudo tuned-profiles-sap-hana", expect_ret=0, timeout=180)
+        run_cmd(test_instance, r"sudo rpm -q --queryformat '%{NAME}' tuned-profiles-sap-hana", expect_ret=0)
+        run_cmd(test_instance, "sudo rpm -e zsh", expect_ret=0)
+
 def test_stage3_test_yum_group_install(test_instance):
     if 'ATOMIC' in test_instance.info['name'].upper():
         test_instance.skipTest('skip in Atomic AMIs')

@@ -607,7 +607,7 @@ def is_arch(test_instance, arch="", action=None):
     '''
     output = run_cmd(test_instance, "lscpu", expect_ret=0)
     if arch in output:
-        test_instance.log.info("{}detected.".format(arch))
+        test_instance.log.info("{} detected.".format(arch))
         return True
     else:
         if action == "cancel":
