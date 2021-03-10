@@ -2,22 +2,32 @@ import json
 from ami_val.libs import utils_lib, resource_class, aws_lib
 
 def test_stage0_check_aminame(test_instance):
+    test_instance.log.info("Details:{}".format(json.dumps(test_instance.info, indent=4)))
     aminame = test_instance.info['name']
     if 'RHEL' in aminame:
         test_instance.log.info("RHEL is expected and found in AMI's name in push task")
         if 'SAP' in aminame:
             if 'Access2' in aminame:
                 test_instance.fail('the -access images are not needed for this sap image set.(RHELDST-4739)')
+        if 'HA' in aminame:
+            if 'arm64' in aminame:
+                test_instance.fail('We don’t support aarch64 in RHEL HA(mail confirmed), so no need to include it in push task')
     else:
         test_instance.fail('RHEL is expected in AMI name but get {} in push task'.format(aminame))
-    test_instance.log.info("Details:{}".format(json.dumps(test_instance.info, indent=4)))
 
-def test_stage0_check_ena_enabled(test_instance):
-    if test_instance.info['ena_support'] != 'true':
-        test_instance.log.info('ena_support is enabled in push task')
-    else:
-        test_instance.fail('ena_support is expected true but get {} in push task'.format(test_instance.info['ena_support']))
+def test_stage0_check_ena_set_in_push(test_instance):
     test_instance.log.info("Details:{}".format(json.dumps(test_instance.info, indent=4)))
+    aminame = test_instance.info['name']
+    if aminame.startswith(('RHEL-6','RHEL-7.0','RHEL-7.1','RHEL-7.2','RHEL-7.3')):
+        if test_instance.info['ena_support']:
+            test_instance.fail('ena_support should be disabled in push task before RHEL-7.4, acutal {}'.format(test_instance.info['ena_support']))
+        else:
+            test_instance.log.info('ena_support is disabled as expected in push task before RHEL-7.4, acutal: {}'.format(test_instance.info['ena_support']))
+    else:
+        if not test_instance.info['ena_support']:
+            test_instance.fail('ena_support should be enabled in push task after RHEL-7.4, acutal: {}'.format(test_instance.info['ena_support']))
+        else:
+            test_instance.log.info('ena_support is enabled as expected in push task after RHEL-7.4, acutal: {}'.format(test_instance.info['ena_support']))
 
 def test_stage0_launch_instance(test_instance):
     '''

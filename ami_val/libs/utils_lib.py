@@ -283,7 +283,7 @@ def prepare_dir(args):
     if 'http' in args.amis_file:
         print("Task url provided, try to download it")
         task_url = args.amis_file.replace('push','task')
-        task_url = args.amis_file.replace('https','http')
+        task_url = task_url.replace('https','http')
         json_url = task_url + "/log/images.json?format=raw"
         print('Get data from %s' % json_url)
         s = request.urlopen(json_url)

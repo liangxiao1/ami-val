@@ -32,6 +32,8 @@ def aws_init_key(region=None, profile=None, log=None):
     if profile is None:
         profile = 'default'
     log.info("Use profile:{} in region {}".format(profile,default_regions))
+    ec2_resource = None
+    ec2_client = None
     for region in default_regions:
         try:
             session = boto3.session.Session(profile_name=profile, region_name=region)
@@ -42,6 +44,9 @@ def aws_init_key(region=None, profile=None, log=None):
             break
         except Exception as error:
             log.info("Try to init in region:{} result:{}".format(region,str(error)))
+    if ec2_resource is None:
+        log.error('Unable to init {} in any region'.format(profile))
+        sys.exit(1)
     return ec2_resource, ec2_client
 
 def aws_vpc_sg_find(vpcid, region, profile_name, log=None):

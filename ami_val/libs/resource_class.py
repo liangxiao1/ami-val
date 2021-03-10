@@ -567,6 +567,14 @@ class EC2VM():
         except Exception as err:
             self.log.info("Failed to change instance type to {}, ret:{}".format(new_type, err)) 
             return False
-    
+
     def new_ssh_client(self):
         return rmt_ssh.build_connection(rmt_node=self.floating_ip, rmt_user=self.ssh_username, rmt_password=None, rmt_keyfile=self.ssh_key_path, timeout=180, log=self.log)
+
+    def is_image_ena_enabled(self):
+        try:
+            image = self.__resource.Image(self.ami_id)
+            return image.ena_support
+        except Exception as err:
+            self.log.info('Cannot get image ena_support status.{}'.format(err))
+            return False

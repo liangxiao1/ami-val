@@ -76,6 +76,22 @@ def test_stage1_check_cpu_num(test_instance):
     cmd = "sudo cat /proc/cpuinfo | grep '^processor' | wc -l"
     run_cmd(test_instance, cmd, expect_ret=0, expect_kw=str(cpucount), msg='check online cpu match spec define')
 
+def test_stage1_check_ena_set_in_image(test_instance):
+    '''
+    check the number of cpu cores available
+    '''
+    aminame = test_instance.info['name']
+    if aminame.startswith(('RHEL-6','RHEL-7.0','RHEL-7.1','RHEL-7.2','RHEL-7.3')):
+        if test_instance.vm.is_image_ena_enabled():
+            test_instance.fail("Image ena_support is enabled as unexpected before RHEL-7.4")
+        else:
+            test_instance.log.info("Image ena_support is disabled as expected before RHEL-7.4")
+    else:
+        if not test_instance.vm.is_image_ena_enabled():
+            test_instance.fail("Image ena_support is disabled as unexpected after RHEL-7.4")
+        else:
+            test_instance.log.info("Image ena_support is enabled as expected after RHEL-7.4")
+
 def test_stage1_check_inittab(test_instance):
     '''
     check default runlevel or systemd target
