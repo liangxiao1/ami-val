@@ -356,7 +356,7 @@ class EC2VM():
             if 'metal' in self.instance_type:
                 time.sleep(120)
             else:
-                time.sleep(5)
+                time.sleep(20)
             return True
         except Exception as err:
             self.log.info(err)

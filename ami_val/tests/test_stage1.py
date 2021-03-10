@@ -114,6 +114,14 @@ def test_stage1_check_nameserver(test_instance):
     '''
     run_cmd(test_instance, "ping -c 5 google-public-dns-a.google.com", expect_ret=0, msg='check if DNS resolving works')
 
+def test_stage1_check_network_setup(test_instance):
+    '''
+    check for networking setup
+    '''
+
+    run_cmd(test_instance, 'grep "^NETWORKING=yes" /etc/sysconfig/network', expect_ret=0, msg='check /etc/sysconfig/network')
+    run_cmd(test_instance, 'egrep "^DEVICE=(|\\\")eth0(|\\\")" /etc/sysconfig/network-scripts/ifcfg-eth0', expect_ret=0, msg='check eth0 used')
+
 def test_stage1_check_no_avc_denials(test_instance):
     '''
     check there is no avc denials (selinux)
