@@ -5,6 +5,30 @@ import json
 from ami_val.libs.utils_lib import run_cmd
 import ami_val
 
+def test_stage2_check_auditd(test_instance):
+    """
+    Check auditd:
+    - service should be on
+    - config files shoud have specified checksums
+    """
+    if 'ATOMIC' in test_instance.info['name'].upper():
+        test_instance.skipTest('skip run in Atomic AMIs')
+    cmd = 'sudo systemctl is-active auditd'
+    run_cmd(test_instance, cmd, expect_ret=0, msg='check if auditd service is active')
+    out = run_cmd(test_instance, 'sudo cat /etc/redhat-release', expect_ret=0, msg='get release name')
+    if 'release 8' in out:
+        auditd_checksum = '7bfa16d314ddb8b96a61a7f617b8cca0'
+        auditd_rules_checksum = '795528bd4c7b4131455c15d5d49991bb'
+    elif 'release 7' in out:
+        # 7.5 onward
+        auditd_checksum = '29f4c6cd67a4ba11395a134cf7538dbd'
+        auditd_rules_checksum = 'f1c2a2ef86e5db325cd2738e4aa7df2c'
+    else:
+        test_instance.skipTest('skip run in el5, el6 and earlier than 7.5. el9 will be added')
+
+    run_cmd(test_instance, 'sudo md5sum /etc/audit/auditd.conf', expect_kw=auditd_checksum)
+    run_cmd(test_instance, 'sudo md5sum /etc/audit/audit.rules', expect_kw=auditd_rules_checksum)
+
 def test_stage2_check_ha_specific(test_instance):
     if 'HA' not in test_instance.info['name']:
         test_instance.skipTest('only run in HA AMIs')

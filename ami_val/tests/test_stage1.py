@@ -9,6 +9,20 @@ def test_stage1_check_bash_history(test_instance):
         cmd = 'sudo cat ~{}/.bash_history'.format(user)
         run_cmd(test_instance, cmd, expect_not_ret='0', msg='check bash history does not exist in fresh AMI')
 
+
+def test_stage1_check_cds_hostnames(test_instance):
+    '''
+    check cds hostname
+    '''
+    rhui_cds_hostnames = ["rhui2-cds01.{}.aws.ce.redhat.com".format(test_instance.info['region']),
+                          "rhui2-cds02.{}.aws.ce.redhat.com".format(test_instance.info['region']),
+                          "rhui3-cds01.{}.aws.ce.redhat.com".format(test_instance.info['region']),
+                          "rhui3-cds02.{}.aws.ce.redhat.com".format(test_instance.info['region']),
+                          "rhui3-cds03.{}.aws.ce.redhat.com".format(test_instance.info['region'])]
+    for cds in rhui_cds_hostnames:
+        cmd = "sudo getent hosts {}".format(cds)
+        run_cmd(test_instance, cmd, expect_ret=0, msg='check {}'.format(cds))
+
 def test_stage1_check_chrony_aws(test_instance):
     '''
     rhbz: 1679763 [RFE] AWS AMI - Add Amazon Timesync Service
@@ -107,6 +121,36 @@ def test_stage1_check_inittab(test_instance):
         out = run_cmd(test_instance, 'uname -r')
         if 'el5' in out:
             run_cmd(test_instance, "grep '^si:' /etc/inittab", expect_kw="si::sysinit:/etc/rc.d/rc.sysinit")
+
+def test_stage1_check_instance_identity(test_instance):
+    '''
+    try to fetch instance identity from EC2 and compare with expectation
+    '''
+    aminame = test_instance.info['name']
+    cmd = 'curl http://169.254.169.254/latest/dynamic/instance-identity/document'
+    output = run_cmd(test_instance, cmd, expect_ret=0, msg='get instance identity data')
+    instance = json.loads(output)
+    if instance['imageId'] != test_instance.info['ami']:
+        test_instance.fail("instance ami-id({}) does not match tested AMIs({})".format(instance['imageId'], test_instance.info['ami']))
+    else:
+        test_instance.log.info("instance ami-id({}) match tested AMIs({})".format(instance['imageId'], test_instance.info['ami']))
+    if instance['region'] != test_instance.info['region']:
+        test_instance.fail("instance region({}) does not match tested AMIs({})".format(instance['region'], test_instance.info['region']))
+    else:
+        test_instance.log.info("instance region({}) match tested AMIs({})".format(instance['region'], test_instance.info['region']))
+    if instance['architecture'] != test_instance.info['release']['arch']:
+        test_instance.fail("instance arch({}) does not match tested AMIs({})".format(instance['architecture'], test_instance.info['release']['arch']))
+    else:
+        test_instance.log.info("instance arch({}) match tested AMIs({})".format(instance['architecture'], test_instance.info['release']['arch']))
+
+    if 'Hourly2' in aminame:
+        billingcode = 'bp-6fa54006'
+    if 'Access2' in aminame:
+        billingcode = 'bp-63a5400a'
+    if billingcode not in instance['billingProducts']:
+        test_instance.fail("instance billingcode({}) does not match expected({})".format(instance['billingProducts'], billingcode))
+    else:
+        test_instance.log.info("instance billingcode({}) match expected({})".format(instance['billingProducts'], billingcode))
 
 def test_stage1_check_nameserver(test_instance):
     '''
