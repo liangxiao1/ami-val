@@ -48,6 +48,15 @@ def test_stage2_check_libc6_xen_conf(test_instance):
     """
     run_cmd(test_instance, 'sudo test -f /etc/ld.so.conf.d/libc6-xen.conf', expect_ret=1, msg='check for /etc/ld.so.conf.d/libc6-xen.conf absence on RHEL')
 
+def test_stage2_check_ttyS0_conf(test_instance):
+    """
+    bz: 1103344
+    check no "/etc/init/ttyS0.conf" exists.
+    check no "/dev/ttyS0: tcgetattr: Input/output error" in "/var/log/secure"
+    """
+    run_cmd(test_instance, 'sudo cat /etc/init/ttyS0.conf', expect_not_ret=0, msg='make sure no /etc/init/ttyS0.conf found')
+    run_cmd(test_instance, 'sudo cat /etc/init/ttyS0.bak', msg='ttyS0.bak may also not in RHEL nowadays')
+
 def test_stage2_test_reboot_hostname(test_instance):
     '''
     check that reboot doesn't change the hostname
