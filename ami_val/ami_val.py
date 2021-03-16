@@ -97,7 +97,11 @@ def main():
     ec2_profile = 'default'
     all_ts = []
     with open(amis_file) as fh:
-        amis_dict = json.load(fh)
+        try:
+            amis_dict = json.load(fh)
+        except json.decoder.JSONDecodeError as exc:
+            print("Failed to load {}. Please check manually".format(amis_file))
+            sys.exit(1)
         for ami in amis_dict:
             ts = resource_class.BaseTest()
             ts.info = ami

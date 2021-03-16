@@ -2,6 +2,7 @@ import os
 import sys
 import time
 import json
+import re
 from ami_val.libs.utils_lib import run_cmd, is_arch
 
 def test_stage1_check_bash_history(test_instance):
@@ -29,6 +30,13 @@ def test_stage1_check_chrony_aws(test_instance):
     '''
     run_cmd(test_instance, "sudo cat /etc/chrony.conf", expect_ret=0, expect_kw='server 169.254.169.123', msg='check chrony points to Amazon Time Sync service')
 
+def test_stage1_check_cloud_firstboot(test_instance):
+    '''
+    check that rh-cloud-firstboot is disabled
+    '''
+    run_cmd(test_instance, "sudo chkconfig --list rh-cloud-firstboot", expect_kw='3:off', msg='check that rh-cloud-firstboot is disabled')
+    run_cmd(test_instance, "sudo cat /etc/sysconfig/rh-cloud-firstboot", expect_kw='RUN_FIRSTBOOT=NO', msg='check that rh-cloud-firstboot is configured')
+
 def test_stage1_check_cmdline_console(test_instance):
     '''
     console output shoud be redirected to serial for for hvm instances
@@ -39,7 +47,12 @@ def test_stage1_check_cmdline_crashkernel(test_instance):
     '''
     crashkernel should be enabled in image
     '''
-    run_cmd(test_instance, "sudo cat /proc/cmdline", expect_ret=0, expect_kw='crashkernel=auto', msg='check crashkernel is enabled')
+    aminame = test_instance.info['name']
+    if 'RHEL-6' in aminame:
+        run_cmd(test_instance, "sudo service kdump status")
+        run_cmd(test_instance, "sudo cat /proc/cmdline", expect_ret=0, expect_kw='crashkernel', msg='crashkernel not required as xen kdump unsupported')
+    else:
+        run_cmd(test_instance, "sudo cat /proc/cmdline", expect_ret=0, expect_kw='crashkernel=auto', msg='check crashkernel is enabled')
 
 def test_stage1_check_cmdline_ifnames(test_instance):
     '''
@@ -47,6 +60,9 @@ def test_stage1_check_cmdline_ifnames(test_instance):
     ifnames should be specified
     https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/enhanced-networking-ena.html
     '''
+    aminame = test_instance.info['name']
+    if 'RHEL-6' in aminame:
+        test_instance.skipTest('not required in el6')
     run_cmd(test_instance, "sudo cat /proc/cmdline", expect_ret=0, expect_kw='net.ifnames=0', msg='check ifnames is specified')
 
 def test_stage1_check_cmdline_nouveau(test_instance):
@@ -54,6 +70,9 @@ def test_stage1_check_cmdline_nouveau(test_instance):
     rhbz: 1645772
     nouveau should be disabled
     '''
+    aminame = test_instance.info['name']
+    if 'RHEL-6' in aminame:
+        test_instance.skipTest('not required in el6')
     run_cmd(test_instance, "sudo cat /proc/cmdline", expect_ret=0, expect_kw='rd.blacklist=nouveau', msg='check nouveau is in blacklist')
 
 def test_stage1_check_cmdline_nvme_io_timeout(test_instance):
@@ -61,6 +80,9 @@ def test_stage1_check_cmdline_nvme_io_timeout(test_instance):
     rhbz: 1732506
     change default /sys/module/nvme_core/parameters/io_timeout from 30 to 4294967295
     '''
+    aminame = test_instance.info['name']
+    if 'RHEL-6' in aminame:
+        test_instance.skipTest('not required in el6')
     run_cmd(test_instance, "sudo cat /proc/cmdline", expect_ret=0, expect_kw='nvme_core.io_timeout=4294967295', msg='checking cmdline')
     out = run_cmd(test_instance, 'sudo lsblk')
     if 'nvme' in out:
@@ -79,7 +101,7 @@ def test_stage1_check_cpu_flags(test_instance):
     check various cpu flags
     '''
     is_arch(test_instance, arch='x86_64', action='cancel')
-    cmd = "sudo lscpu"
+    cmd = "sudo cat /proc/cpuinfo"
     run_cmd(test_instance, cmd, expect_ret=0, expect_kw='avx,xsave', msg='check avx and xsave flags')
 
 def test_stage1_check_cpu_num(test_instance):
@@ -105,6 +127,24 @@ def test_stage1_check_ena_set_in_image(test_instance):
             test_instance.fail("Image ena_support is disabled as unexpected after RHEL-7.4")
         else:
             test_instance.log.info("Image ena_support is enabled as expected after RHEL-7.4")
+
+def test_stage1_check_grub(test_instance):
+    '''
+    Check grub config:
+    - /boot/grub/menu.lst exists
+    - /boot/grub/menu.lst is symlink for /boot/grub/grub.conf
+    - hard drive is not (hd0,0) for paravirtual
+    '''
+    aminame = test_instance.info['name']
+    if not aminame.startswith(('RHEL-6')):
+        test_instance.skipTest('only run in el5, el6')
+    cmd = 'sudo readlink -e /boot/grub/menu.lst'
+    run_cmd(test_instance, cmd, expect_ret=0, expect_kw="/boot/grub/grub.conf", 
+        msg='check /boot/grub/menu.lst is symlink for /boot/grub/grub.conf')
+    cmd = 'sudo cat /boot/grub/grub.conf'
+    out = run_cmd(test_instance, cmd, expect_ret=0, msg='get grub.conf')
+    if r"hd0,0" not in out:
+        test_instance.fail("'hd0,0' not found in grub.conf")
 
 def test_stage1_check_inittab(test_instance):
     '''
@@ -143,9 +183,11 @@ def test_stage1_check_instance_identity(test_instance):
     else:
         test_instance.log.info("instance arch({}) match tested AMIs({})".format(instance['architecture'], test_instance.info['release']['arch']))
 
-    if 'Hourly2' in aminame:
+    if 'HA' in aminame:
+        billingcode = 'bp-79a54010'
+    elif 'Hourly2' in aminame:
         billingcode = 'bp-6fa54006'
-    if 'Access2' in aminame:
+    elif 'Access2' in aminame:
         billingcode = 'bp-63a5400a'
     if billingcode not in instance['billingProducts']:
         test_instance.fail("instance billingcode({}) does not match expected({})".format(instance['billingProducts'], billingcode))
@@ -178,12 +220,29 @@ def test_stage1_check_pkg_signed(test_instance):
     check no pkg signature is none,
     and check that specified gpg keys are installed
     '''
+    cmd = "sudo rpm -qa|grep gpg-pubkey"
+    run_cmd(test_instance, cmd, expect_ret=0, msg='check gpg-pubkey installed')
     cmd = "sudo rpm -q gpg-pubkey|wc -l"
-    run_cmd(test_instance, cmd, expect_ret=0, expect_kw='2', msg='check gpg-pubkey installed')
+    run_cmd(test_instance, cmd, expect_ret=0, expect_kw='2', msg='check 2 gpg-pubkey installed')
     cmd = "sudo rpm -qa --qf '%{NAME}-%{VERSION}-%{RELEASE} %{SIGPGP:pgpsig}\n'|grep -v gpg-pubkey"
     run_cmd(test_instance, cmd, expect_ret=0, expect_not_kw='none', msg='check no pkg signature is none')
     cmd = "sudo rpm -qa --qf '%{NAME}-%{VERSION}-%{RELEASE} %{SIGPGP:pgpsig}\n'|grep -v gpg-pubkey|awk -F' ' '{print $NF}'|sort|uniq|wc -l"
     run_cmd(test_instance, cmd, expect_ret=0, expect_kw='1', msg='check use only one keyid')
+
+def test_stage1_check_product_id(test_instance):
+    '''
+    bz: 1938930
+    issue: RHELPLAN-60817
+    check if product id matches /etc/redhat-release
+    '''
+    check_cmd = "sudo cat /etc/redhat-release"
+    output = run_cmd(test_instance,check_cmd, expect_ret=0, msg='check release name')
+    product_id = re.findall('\d.\d', output)[0]
+    test_instance.log.info("Get product id: {}".format(product_id))
+    cmd = 'sudo rpm -qa|grep redhat-release'
+    run_cmd(test_instance,cmd, cancel_ret='0', msg='get redhat-release-server version')
+    cmd = 'sudo rct cat-cert /etc/pki/product-default/*.pem'
+    run_cmd(test_instance,cmd, expect_ret=0, expect_kw="Version: {}".format(product_id), msg='check product certificate')
 
 def test_stage1_check_rhui_pkg(test_instance):
     aminame = test_instance.info['name']
