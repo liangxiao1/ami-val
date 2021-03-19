@@ -50,7 +50,7 @@ def test_stage1_check_cmdline_crashkernel(test_instance):
     aminame = test_instance.info['name']
     if 'RHEL-6' in aminame:
         run_cmd(test_instance, "sudo service kdump status")
-        run_cmd(test_instance, "sudo cat /proc/cmdline", expect_ret=0, expect_kw='crashkernel', msg='crashkernel not required as xen kdump unsupported')
+        run_cmd(test_instance, "sudo cat /proc/cmdline", expect_ret=0, expect_not_kw='crashkernel', msg='crashkernel not required as xen kdump unsupported')
     else:
         run_cmd(test_instance, "sudo cat /proc/cmdline", expect_ret=0, expect_kw='crashkernel=auto', msg='check crashkernel is enabled')
 
@@ -127,6 +127,24 @@ def test_stage1_check_ena_set_in_image(test_instance):
             test_instance.fail("Image ena_support is disabled as unexpected after RHEL-7.4")
         else:
             test_instance.log.info("Image ena_support is enabled as expected after RHEL-7.4")
+
+
+def test_stage1_check_firewalld(test_instance):
+    '''
+    firewalld is not required in cloud because there is security group.
+    '''
+    check_cmd = "sudo cat /etc/redhat-release"
+    output = run_cmd(test_instance,check_cmd, expect_ret=0, msg='check release name')
+    product_id = re.findall('\d.\d', output)[0]
+    test_instance.log.info("Get product id: {}".format(product_id))
+    if product_id < '7.0':
+        cmd = "sudo chkconfig --list ip6tables"
+        run_cmd(test_instance,cmd, expect_ret=0, expect_kw='3:off', msg='check ip6tables is disabled')
+        cmd = "sudo chkconfig --list iptables"
+        run_cmd(test_instance,cmd, expect_ret=0, expect_kw='3:off', msg='check iptables is disabled')
+    else:
+        cmd = 'sudo rpm -q firewalld'
+        run_cmd(test_instance,cmd, expect_not_ret='1', msg='check firewalld is not installed')
 
 def test_stage1_check_grub(test_instance):
     '''
@@ -306,3 +324,25 @@ def test_stage1_check_username(test_instance):
         run_cmd(test_instance, cmd, expect_not_ret='0', msg='check no {} user in fresh AMI'.format(user))
     run_cmd(test_instance, 'whoami', expect_kw=test_instance.vm.ssh_username, msg='check default user')
     run_cmd(test_instance, 'uname -a', msg='get kernel version')
+
+def test_stage1_check_yum_plugins(test_instance):
+    '''
+    bz: 1932802
+    earlier than RHEL-8.4 yum plugin product-id and subscription-manager should be disabled by default.
+    '''
+    if 'ATOMIC' in test_instance.info['name'].upper():
+        test_instance.skipTest('skip run in Atomic AMIs')
+    check_cmd = "sudo cat /etc/redhat-release"
+    output = run_cmd(test_instance,check_cmd, expect_ret=0, msg='check release name')
+    product_id = re.findall('\d.\d', output)[0]
+    test_instance.log.info("Get product id: {}".format(product_id))
+    if product_id < '8.4':
+        expect_kw="enabled=0"
+        status = 'disabled'
+    else:
+        expect_kw="enabled=1"
+        status = 'enabled'
+    cmd = 'sudo cat /etc/yum/pluginconf.d/product-id.conf'
+    run_cmd(test_instance,cmd, expect_ret=0, expect_kw=expect_kw, msg='check yum product-id plugin is {}'.format(status))
+    cmd = 'sudo cat /etc/yum/pluginconf.d/subscription-manager.conf'
+    run_cmd(test_instance,cmd, expect_ret=0, expect_kw=expect_kw, msg='check yum subscription-manager plugin is {}'.format(status))
