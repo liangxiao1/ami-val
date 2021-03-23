@@ -72,6 +72,7 @@ def test_stage2_test_reboot_hostname(test_instance):
     '''
 
     hostname_1 = run_cmd(test_instance, 'hostname', expect_ret=0, msg='get hostname before reboot')
+    test_instance.ssh_client.close()
     test_instance.vm.reboot()
     test_instance.ssh_client = test_instance.vm.new_ssh_client()
     run_cmd(test_instance, 'last', expect_ret=0, msg='get last history')

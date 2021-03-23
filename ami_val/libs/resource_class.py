@@ -346,17 +346,19 @@ class EC2VM():
             return self.is_stopped()
         return True
 
-    def reboot(self, wait=False):
+    def reboot(self, wait=True):
         '''
         Reboot from outside
         '''
         self.log.info("Rebooting instance: {}".format(self.instance_id))
         try:
+            self.__ec2_instance.reload()
             self.__ec2_instance.reboot()
-            if 'metal' in self.instance_type:
-                time.sleep(120)
-            else:
-                time.sleep(20)
+            if wait:
+                if 'metal' in self.res_type:
+                    time.sleep(120)
+                else:
+                    time.sleep(40)
             return True
         except Exception as err:
             self.log.info(err)

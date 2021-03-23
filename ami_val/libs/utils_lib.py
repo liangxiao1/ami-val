@@ -445,6 +445,8 @@ def run_cmd(test_instance,
                 output = ret.stdout
     except Exception as err:
         test_instance.log.error("Run cmd failed as {}".format(err))
+        test_instance.log.info("Try to start a new connection")
+        test_instance.ssh_client = test_instance.vm.new_ssh_client()
         status = None
         exception_hit = True
 
