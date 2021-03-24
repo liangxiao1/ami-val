@@ -33,7 +33,7 @@ def test_stage3_check_yum_repoinfo(test_instance):
     if 'RHEL-6' in test_instance.info['name'].upper():
         test_instance.skipTest('skip in el6 as no yum repoinfo subcommand')
     cmd = "sudo yum repoinfo"
-    run_cmd(test_instance, cmd, expect_ret=0, timeout=1200, msg='try to get repo info')
+    run_cmd(test_instance, cmd, expect_ret=0, expect_not_kw='Repo-pkgs          : 0', timeout=1200, msg='try to get repo info')
 
 def test_stage3_test_yum_package_install(test_instance):
     if 'ATOMIC' in test_instance.info['name'].upper():

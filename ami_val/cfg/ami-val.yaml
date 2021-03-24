@@ -3,7 +3,8 @@ max_boot_time: 40
 # remote_user: user and keyfile to login instance
 ssh_user: ec2-user
 ssh_keyfile: '/home/virtqe_s1.pem'
-# if virtqe_s1 keypair not found, will upload ssh_pubfile automatically
+# if pair_name keypair not found, will upload ssh_pubfile automatically
+# ssh_pubfile is not required if pair_name exists already.
 pair_name: virtqe_s1
 ssh_pubfile: '/home/virtqe_s1.pub'
 # below is for test which requires subscription, not used now

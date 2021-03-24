@@ -50,24 +50,39 @@ aws_secret_access_key = xxxxxxxxx
 
 ```
 
+### The config file
+
+You can change the default setting in "cfg/ami-val.yaml" locates in the same installed dir.
+
+Below option is must required for ssh login:
+```
+# remote_user: user and keyfile to login instance
+ssh_user: ec2-user
+ssh_keyfile: '/home/virtqe_s1.pem'
+# if pair_name keypair not found, will upload ssh_pubfile automatically
+# ssh_pubfile is not required if pair_name exists already.
+pair_name: virtqe_s1
+ssh_pubfile: '/home/virtqe_s1.pub'
+```
+
 ### Run all ami-val supported cases(the default path is "/usr/local/bin" if not in virtual environment. )  
 
 `# ami-val -f https://xxxx/pub/task/343012 --paralle`  
 `# ami-val -f images.json`  
 
-The json format should be like this:
+The json format should be like this, except required, other are options:
 
 ```bash
 # cat images.json
 [
   {
-    "ami": "ami-01166axxxxxx", 
-    "description": "Provided by Red Hat, Inc.", 
-    "ena_support": true, 
-    "name": "RHEL-xxxxxx-x86_64-1-Hourly2-GP2", 
-    "region": "us-east-1", 
+    "ami": "ami-01166axxxxxx", <- required
+    "description": "Provided by Red Hat, Inc.",
+    "ena_support": true, <- required
+    "name": "RHEL-xxxxxx-x86_64-1-Hourly2-GP2", <- required
+    "region": "us-east-1", <- required
     "release": {
-      "arch": "x86_64", 
+      "arch": "x86_64", <- required
       "base_product": null, 
       "base_version": null, 
       "date": "20201020", 
@@ -97,20 +112,6 @@ The json format should be like this:
 #### Filter case name with keywords stage1 and skip timezone check
 
 `# ami-val -l -p stage1 -s timezone`
-
-### The config file
-
-You can change the default setting in "cfg/ami-val.yaml".
-
-Below option is must required:
-```
-# remote_user: user and keyfile to login instance
-ssh_user: ec2-user
-ssh_keyfile: '/home/virtqe_s1.pem'
-# if virtqe_s1 keypair not found, will upload ssh_pubfile automatically
-pair_name: virtqe_s1
-ssh_pubfile: '/home/virtqe_s1.pub'
-```
 
 ### Clean the resource created  
 ```bash

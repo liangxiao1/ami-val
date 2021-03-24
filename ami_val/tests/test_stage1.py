@@ -128,7 +128,6 @@ def test_stage1_check_ena_set_in_image(test_instance):
         else:
             test_instance.log.info("Image ena_support is enabled as expected after RHEL-7.4")
 
-
 def test_stage1_check_firewalld(test_instance):
     '''
     firewalld is not required in cloud because there is security group.
@@ -201,22 +200,46 @@ def test_stage1_check_instance_identity(test_instance):
     else:
         test_instance.log.info("instance arch({}) match tested AMIs({})".format(instance['architecture'], test_instance.info['release']['arch']))
 
-    if 'HA' in aminame:
-        billingcode = 'bp-79a54010'
+    if 'HA' in aminame and 'Access2' not in aminame:
+        # RHELDST-4222, on-demand (hourly) has the billing code for RHEL and for HA
+        billingcodes = ['bp-79a54010', 'bp-6fa54006']
     elif 'Hourly2' in aminame:
-        billingcode = 'bp-6fa54006'
+        billingcodes = ['bp-6fa54006']
     elif 'Access2' in aminame:
-        billingcode = 'bp-63a5400a'
-    if billingcode not in instance['billingProducts']:
-        test_instance.fail("instance billingcode({}) does not match expected({})".format(instance['billingProducts'], billingcode))
-    else:
-        test_instance.log.info("instance billingcode({}) match expected({})".format(instance['billingProducts'], billingcode))
+        # Cloud Access billing code, means don't charge for the OS (so it can apply to anything cloud Access)
+        billingcodes = ['bp-63a5400a']
+    for billingcode in billingcodes:
+        if billingcode not in instance['billingProducts']:
+            test_instance.fail("expected({}) not found in instance billingcode({})".format(billingcode, instance['billingProducts']))
+        else:
+            test_instance.log.info("expected({}) found in instance billingcode({}).".format(billingcode, instance['billingProducts']))
 
 def test_stage1_check_nameserver(test_instance):
     '''
     check if DNS resolving works
     '''
     run_cmd(test_instance, "ping -c 5 google-public-dns-a.google.com", expect_ret=0, msg='check if DNS resolving works')
+
+def test_stage1_check_network_driver(test_instance):
+    '''
+    if ena network device found, eth0 should use ena as default driver
+    if vf network device found, eth0 should use ixgbevf as default driver
+    if others, eth0 should use vif as default driver
+    if it is not a xen instance, ena should be used.
+    '''
+    cmd = 'sudo lspci'
+    pci_out = run_cmd(test_instance, cmd, expect_ret=0, msg='get pci devices')
+    ethtool_cmd = 'sudo ethtool -i eth0'
+    if 'ENA' in pci_out:
+        run_cmd(test_instance, ethtool_cmd, expect_ret=0, expect_kw='ena', msg='check if eth0 is using ena driver')
+    elif 'Virtual Function' in pci_out:
+        run_cmd(test_instance, ethtool_cmd, expect_ret=0, expect_kw='ixgbevf', msg='check if eth0 is using ixgbevf driver')
+    else:
+        run_cmd(test_instance, ethtool_cmd, expect_ret=0, expect_kw='vif', msg='check if eth0 is using vif driver')
+    cmd = 'sudo lscpu'
+    cpu_out = run_cmd(test_instance, cmd, expect_ret=0, msg='get cpu info')
+    if 'Xen' not in cpu_out:
+        run_cmd(test_instance, ethtool_cmd, expect_ret=0, expect_kw='ena', msg='ena must used in KVM, aarch64 and metal instances')
 
 def test_stage1_check_network_setup(test_instance):
     '''
@@ -232,6 +255,23 @@ def test_stage1_check_no_avc_denials(test_instance):
     '''
     cmd = "x=$(sudo ausearch -m avc 2>&1 &); echo $x"
     run_cmd(test_instance, cmd, expect_kw='no matches', msg='check no avc denials')
+
+def test_stage1_check_numa(test_instance):
+    '''
+    check if NUMA is enabled on supported machine
+    '''
+    cmd = "sudo lscpu|grep -i 'NUMA node(s)'|awk -F' ' '{print $NF}'"
+    numa_nodes = run_cmd(test_instance, cmd, expect_ret=0, msg='get numa nodes')
+    run_cmd(test_instance, 'dmesg|grep -i numa', expect_ret=0, msg='get numa info')
+    cmd = "sudo dmesg|grep -i 'No NUMA'|wc -l"
+    out = run_cmd(test_instance, cmd, expect_ret=0)
+    if int(numa_nodes) > 1:
+        if int(out) == 1:
+            test_instance.fail("numa seems not enabled as expected")
+        else:
+            test_instance.log.info("numa seems enabled as expected")
+    else:
+        test_instance.log.info("only 1 node found")
 
 def test_stage1_check_pkg_signed(test_instance):
     '''
