@@ -4,6 +4,7 @@ import time
 import json
 from ami_val.libs.utils_lib import run_cmd
 import ami_val
+import re
 
 def test_stage3_check_selinux(test_instance):
     '''
@@ -58,4 +59,46 @@ def test_stage3_test_yum_group_install(test_instance):
     cmd = "sudo yum -y groupinstall 'Development tools'"
     run_cmd(test_instance, cmd, expect_ret=0, timeout=1200, msg='try to install Development tools group')
     run_cmd(test_instance, 'sudo rpm -q glibc-devel', expect_ret=0, msg='try to check installed pkg')
+
+def test_stage3_test_subscription_manager_auto(test_instance):
+    '''
+    bz: 1932802, 1905398
+    '''
+    if 'ATOMIC' in test_instance.info['name'].upper():
+        test_instance.skipTest('skip in Atomic AMIs')
+    check_cmd = "sudo cat /etc/redhat-release"
+    output = run_cmd(test_instance,check_cmd, expect_ret=0, msg='check release name')
+    product_id = re.findall('\d.\d', output)[0]
+    test_instance.log.info("Get product id: {}".format(product_id))
+    if product_id < '8.4':
+        test_instance.skipTest('skip in earlier than el8.4')
+
+    cmd = "sudo subscription-manager config"
+    run_cmd(test_instance, cmd, expect_ret=0, expect_kw="auto_registration = 1,manage_repos = 0", msg='try to check subscription-manager config')
+    cmd = "sudo systemctl is-enabled rhsmcertd"
+    run_cmd(test_instance, cmd, expect_ret=0, msg='try to check rhsmcertd enabled')
+    cmd = "sudo subscription-manager config --rhsmcertd.auto_registration_interval=1"
+    run_cmd(test_instance, cmd, expect_ret=0, msg='try to change rhsmcertd.auto_registration_interval from 60min to 1min')
+    cmd = "sudo systemctl restart rhsmcertd"
+    run_cmd(test_instance, cmd, expect_ret=0, msg='restart rhsmcertd')
+    start_time = time.time()
+    timeout = 600
+    interval = 60
+    while True:
+        cmd = 'sudo cat /var/log/rhsm/rhsmcertd.log'
+        run_cmd(test_instance, cmd, msg='try to check rhsmcertd.log')
+        cmd = 'sudo cat /var/log/rhsm/rhsm.log'
+        run_cmd(test_instance, cmd, msg='try to check rhsm.log')
+        cmd = "sudo subscription-manager identity"
+        out = run_cmd(test_instance, cmd, msg='try to check subscription identity')
+        cmd = "sudo subscription-manager status"
+        out = run_cmd(test_instance, cmd, msg='try to check subscription status')
+        if 'Red Hat Enterprise Linux' in out:
+            test_instance.log.info("auto subscription registered completed")
+            break
+        end_time = time.time()
+        if end_time - start_time > timeout:
+            test_instance.fail("timeout({}s) to wait auto subscription registered completed".format(timeout))
+        test_instance.log.info('wait {}s and try to check again, timeout {}s'.format(interval, timeout))
+        time.sleep(interval)
 

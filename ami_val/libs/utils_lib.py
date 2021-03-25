@@ -143,7 +143,7 @@ def save_resource(logfile, ami_id=None, region=None, arch=None, instance_types_l
                 if region is not None and arch is not None:
                     log.info("update region info {} which arch {} matched".format(region, arch))
                     for ami in sums:
-                        if region in ami['region'] and arch in ami["name"]:
+                        if region in ami['region'] and arch in ami['release']['arch']:
                             if instance_type is not None:
                                 ami['instance_type'] = instance_type
                             if instance_types_list is not None:
