@@ -24,6 +24,27 @@ class FailException(Exception):
 class SkipException(Exception):
     pass
 
+class Result():
+    def __init__(self):
+        self.case_pass = 0
+        self.case_fail = 0
+        self.case_skip = 0
+        self.case_error = 0
+        self.run_time = 0
+        self.cases = []
+
+    @property
+    def case_total(self):
+        return self.case_pass + self.case_fail + self.case_skip + self.case_error
+
+    @property
+    def pass_rate(self):
+        if self.case_total - self.case_skip > 0:
+            pass_rate = self.case_pass/(self.case_total - self.case_skip) * 100
+        else:
+            pass_rate = 0
+        return format(pass_rate,'0.2f')
+
 class BaseTest():
     def __init__(self):
         self.info = None

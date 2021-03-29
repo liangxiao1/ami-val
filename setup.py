@@ -14,14 +14,15 @@ setuptools.setup(
     packages=[ 'ami_val', 'ami_val.tests', 'ami_val.libs'],
     package_data={
         'ami_val': [
-            'data/*',
             'cfg/*',
-            'scripts/*'
+            'data/*',
+            'scripts/*',
+            'templates/*'
         ]
     },
     include_package_data=True,
     #data_files=[('/'+os.path.expanduser("~"), ['cfg/os-tests.yaml']),],
-    install_requires=['PyYAML', 'argparse', 'tipset', 'filelock', 'awscli', 'boto3', 'paramiko'],
+    install_requires=['PyYAML', 'argparse', 'tipset', 'filelock', 'awscli', 'boto3', 'paramiko', 'Jinja2'],
     license="GPLv3+",
     classifiers=[
         'License :: OSI Approved :: GNU General Public License v3 or later (GPLv3+)',

@@ -208,7 +208,6 @@ def main():
     print("Total case num:{} Tested AMIs:{}".format(len(found_cases), len(all_ts)))
     print("Log dir:{}".format(logdir))
     utils_lib.write_html(sum_log, region_missed=region_missed, region_uploaded=region_uploaded)
-    print("HTML summary:{}/sum.html".format(logdir))
     print("Please wait resource cleanup done......")
     cleanup_paralle(all_ts)
 
