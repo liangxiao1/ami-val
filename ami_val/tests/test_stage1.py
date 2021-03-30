@@ -241,6 +241,19 @@ def test_stage1_check_network_driver(test_instance):
     if 'Xen' not in cpu_out:
         run_cmd(test_instance, ethtool_cmd, expect_ret=0, expect_kw='ena', msg='ena must used in KVM, aarch64 and metal instances')
 
+def test_stage1_check_network_ipv6(test_instance):
+    '''
+    check for networking setup
+    '''
+    cmd = "curl http://169.254.169.254/latest/meta-data/network/interfaces/macs"
+    mac = run_cmd(test_instance, cmd, expect_ret=0, msg='get mac address')
+    cmd = "{}/{}/ipv6s".format(cmd, mac)
+    ipv6s = run_cmd(test_instance, cmd, msg='get ipv6 address')
+    if 'Not Found' in ipv6s:
+        test_instance.skipTest('no ipv6 enabled in this subnet')
+    cmd = "sudo ip addr show eth0"
+    run_cmd(test_instance, cmd, expect_kw=ipv6s, msg='check if ipv6 address appear in eth0')
+
 def test_stage1_check_network_setup(test_instance):
     '''
     check for networking setup
@@ -301,6 +314,26 @@ def test_stage1_check_product_id(test_instance):
     run_cmd(test_instance,cmd, cancel_ret='0', msg='get redhat-release-server version')
     cmd = 'sudo rct cat-cert /etc/pki/product-default/*.pem'
     run_cmd(test_instance,cmd, expect_ret=0, expect_kw="Version: {}".format(product_id), msg='check product certificate')
+
+def test_stage1_check_rhel_version(test_instance):
+    '''
+    check if rhel provider matches /etc/redhat-release and ami name
+    '''
+    aminame = test_instance.info['name']
+    if 'HA' in aminame:
+        test_instance.skipTest('not run in HA AMIs')
+    if 'SAP' in aminame:
+        test_instance.skipTest('not run in SAP AMIs')
+    if 'Atomic' in aminame:
+        test_instance.skipTest('not run in Atomic AMIs')
+    check_cmd = "sudo cat /etc/redhat-release"
+    output = run_cmd(test_instance,check_cmd, expect_ret=0, msg='check release name')
+    product_id = re.findall('\d.\d', output)[0]
+    cmd = "sudo rpm -q --qf '%{VERSION}' --whatprovides redhat-release"
+    run_cmd(test_instance,cmd, expect_kw=product_id, msg='check redhat-release version match')
+    if product_id not in aminame:
+        test_instance.fail('{} not found in ami name: {}'.format(product_id, aminame))
+    test_instance.log.info('{} found in ami name: {}'.format(product_id, aminame))
 
 def test_stage1_check_rhui_pkg(test_instance):
     aminame = test_instance.info['name']
