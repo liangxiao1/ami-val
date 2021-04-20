@@ -1,8 +1,9 @@
 import os
+import re
 import sys
 import time
 import json
-from ami_val.libs.utils_lib import run_cmd
+from ami_val.libs.utils_lib import run_cmd, get_product_id
 import ami_val
 
 def test_stage2_check_auditd(test_instance):
@@ -39,17 +40,20 @@ def test_stage2_check_auditd(test_instance):
         run_cmd(test_instance, 'sudo md5sum /etc/audit/audit.rules', expect_kw=auditd_rules_checksum)
 
 def test_stage2_check_ha_specific(test_instance):
-    if 'HA' not in test_instance.info['name']:
-        test_instance.skipTest('only run in HA AMIs')
-    else:
-        script_dir = os.path.realpath(ami_val.__file__)
-        script_dir = os.path.dirname(script_dir)
-        script_file = script_dir + '/scripts/rhel-ha-aws-check.sh'
-        rmt_file = '/tmp/rhel-ha-aws-check.sh'
-        ftp_client = test_instance.ssh_client.open_sftp()
-        ftp_client.put(script_file, rmt_file)
-        run_cmd(test_instance, 'sudo chmod 555 {}'.format(rmt_file), msg='make it executeable')
-        run_cmd(test_instance, 'sudo {} 2>&1'.format(rmt_file), expect_ret=0, msg='run ha test', timeout=1800)
+    if 'HA' not in test_instance.info['name'] and 'SAP' not in test_instance.info['name']:
+        test_instance.skipTest('only run in HA AMIs or RHEL-8+ SAP AMIs')
+
+    product_id = get_product_id(test_instance)
+    if product_id < '8' and 'SAP' in test_instance.info['name']:
+        test_instance.skipTest('skip in earlier than el8 SAP AMIs')
+    script_dir = os.path.realpath(ami_val.__file__)
+    script_dir = os.path.dirname(script_dir)
+    script_file = script_dir + '/scripts/rhel-ha-aws-check.sh'
+    rmt_file = '/tmp/rhel-ha-aws-check.sh'
+    ftp_client = test_instance.ssh_client.open_sftp()
+    ftp_client.put(script_file, rmt_file)
+    run_cmd(test_instance, 'sudo chmod 555 {}'.format(rmt_file), msg='make it executeable')
+    run_cmd(test_instance, 'sudo {} 2>&1'.format(rmt_file), expect_ret=0, msg='run ha test', timeout=1800)
 
 def test_stage2_check_libc6_xen_conf(test_instance):
     """

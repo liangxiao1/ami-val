@@ -879,3 +879,10 @@ new one", same_rate)
             no_fail = False
 
     return no_fail
+
+def get_product_id(test_instance):
+    check_cmd = "sudo cat /etc/redhat-release"
+    output = run_cmd(test_instance,check_cmd, expect_ret=0, msg='check release name')
+    product_id = re.findall('\d.\d', output)[0]
+    test_instance.log.info("Get product id: {}".format(product_id))
+    return product_id

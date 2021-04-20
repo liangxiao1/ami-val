@@ -2,7 +2,7 @@ import os
 import sys
 import time
 import json
-from ami_val.libs.utils_lib import run_cmd
+from ami_val.libs.utils_lib import run_cmd, get_product_id
 import ami_val
 import re
 
@@ -66,10 +66,7 @@ def test_stage3_test_subscription_manager_auto(test_instance):
     '''
     if 'ATOMIC' in test_instance.info['name'].upper():
         test_instance.skipTest('skip in Atomic AMIs')
-    check_cmd = "sudo cat /etc/redhat-release"
-    output = run_cmd(test_instance,check_cmd, expect_ret=0, msg='check release name')
-    product_id = re.findall('\d.\d', output)[0]
-    test_instance.log.info("Get product id: {}".format(product_id))
+    product_id = get_product_id(test_instance)
     if product_id < '8.4':
         test_instance.skipTest('skip in earlier than el8.4')
 

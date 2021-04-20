@@ -3,7 +3,7 @@ import sys
 import time
 import json
 import re
-from ami_val.libs.utils_lib import run_cmd, is_arch
+from ami_val.libs.utils_lib import run_cmd, is_arch, get_product_id
 
 def test_stage1_check_bash_history(test_instance):
     for user in ['ec2-user', 'root']:
@@ -132,10 +132,7 @@ def test_stage1_check_firewalld(test_instance):
     '''
     firewalld is not required in cloud because there is security group.
     '''
-    check_cmd = "sudo cat /etc/redhat-release"
-    output = run_cmd(test_instance,check_cmd, expect_ret=0, msg='check release name')
-    product_id = re.findall('\d.\d', output)[0]
-    test_instance.log.info("Get product id: {}".format(product_id))
+    product_id = get_product_id(test_instance)
     if product_id < '7.0':
         cmd = "sudo chkconfig --list ip6tables"
         run_cmd(test_instance,cmd, expect_ret=0, expect_kw='3:off', msg='check ip6tables is disabled')
@@ -306,10 +303,7 @@ def test_stage1_check_product_id(test_instance):
     issue: RHELPLAN-60817
     check if product id matches /etc/redhat-release
     '''
-    check_cmd = "sudo cat /etc/redhat-release"
-    output = run_cmd(test_instance,check_cmd, expect_ret=0, msg='check release name')
-    product_id = re.findall('\d.\d', output)[0]
-    test_instance.log.info("Get product id: {}".format(product_id))
+    product_id = get_product_id(test_instance)
     cmd = 'sudo rpm -qa|grep redhat-release'
     run_cmd(test_instance,cmd, cancel_ret='0', msg='get redhat-release-server version')
     cmd = 'sudo rct cat-cert /etc/pki/product-default/*.pem'
@@ -326,9 +320,7 @@ def test_stage1_check_rhel_version(test_instance):
         test_instance.skipTest('not run in SAP AMIs')
     if 'Atomic' in aminame:
         test_instance.skipTest('not run in Atomic AMIs')
-    check_cmd = "sudo cat /etc/redhat-release"
-    output = run_cmd(test_instance,check_cmd, expect_ret=0, msg='check release name')
-    product_id = re.findall('\d.\d', output)[0]
+    product_id = get_product_id(test_instance)
     cmd = "sudo rpm -q --qf '%{VERSION}' --whatprovides redhat-release"
     run_cmd(test_instance,cmd, expect_kw=product_id, msg='check redhat-release version match')
     if product_id not in aminame:
@@ -405,10 +397,7 @@ def test_stage1_check_yum_plugins(test_instance):
     '''
     if 'ATOMIC' in test_instance.info['name'].upper():
         test_instance.skipTest('skip run in Atomic AMIs')
-    check_cmd = "sudo cat /etc/redhat-release"
-    output = run_cmd(test_instance,check_cmd, expect_ret=0, msg='check release name')
-    product_id = re.findall('\d.\d', output)[0]
-    test_instance.log.info("Get product id: {}".format(product_id))
+    product_id = get_product_id(test_instance)
     if product_id < '8.4':
         expect_kw="enabled=0"
         status = 'disabled'
