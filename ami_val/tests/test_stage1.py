@@ -3,7 +3,7 @@ import sys
 import time
 import json
 import re
-from ami_val.libs.utils_lib import run_cmd, is_arch, get_product_id
+from ami_val.libs.utils_lib import run_cmd, is_arch, get_product_id, is_fedora, is_cmd_exist
 
 def test_stage1_check_bash_history(test_instance):
     for user in ['ec2-user', 'root']:
@@ -133,7 +133,7 @@ def test_stage1_check_firewalld(test_instance):
     firewalld is not required in cloud because there is security group.
     '''
     product_id = get_product_id(test_instance)
-    if product_id < '7.0':
+    if float(product_id) < float('7.0'):
         cmd = "sudo chkconfig --list ip6tables"
         run_cmd(test_instance,cmd, expect_ret=0, expect_kw='3:off', msg='check ip6tables is disabled')
         cmd = "sudo chkconfig --list iptables"
@@ -197,6 +197,10 @@ def test_stage1_check_instance_identity(test_instance):
     else:
         test_instance.log.info("instance arch({}) match tested AMIs({})".format(instance['architecture'], test_instance.info['release']['arch']))
 
+    if 'Fedora' in aminame:
+        test_instance.log.info('No need to check billingcodes in Fedora AMIs')
+        return
+
     if 'HA' in aminame and 'Access2' not in aminame:
         # RHELDST-4222, on-demand (hourly) has the billing code for RHEL and for HA
         billingcodes = ['bp-79a54010', 'bp-6fa54006']
@@ -224,6 +228,9 @@ def test_stage1_check_network_driver(test_instance):
     if others, eth0 should use vif as default driver
     if it is not a xen instance, ena should be used.
     '''
+    if is_fedora(test_instance):
+        is_cmd_exist(test_instance, 'lspci')
+        is_cmd_exist(test_instance, 'ethtool')
     cmd = 'sudo lspci'
     pci_out = run_cmd(test_instance, cmd, expect_ret=0, msg='get pci devices')
     ethtool_cmd = 'sudo ethtool -i eth0'
@@ -290,8 +297,13 @@ def test_stage1_check_pkg_signed(test_instance):
     '''
     cmd = "sudo rpm -qa|grep gpg-pubkey"
     run_cmd(test_instance, cmd, expect_ret=0, msg='check gpg-pubkey installed')
+    if is_fedora(test_instance):
+        gpg_pubkey_num = '1'
+    else:
+        gpg_pubkey_num = '2'
+
     cmd = "sudo rpm -q gpg-pubkey|wc -l"
-    run_cmd(test_instance, cmd, expect_ret=0, expect_kw='2', msg='check 2 gpg-pubkey installed')
+    run_cmd(test_instance, cmd, expect_ret=0, expect_kw=gpg_pubkey_num, msg='check 2 gpg-pubkey installed')
     cmd = "sudo rpm -qa --qf '%{NAME}-%{VERSION}-%{RELEASE} %{SIGPGP:pgpsig}\n'|grep -v gpg-pubkey"
     run_cmd(test_instance, cmd, expect_ret=0, expect_not_kw='none', msg='check no pkg signature is none')
     cmd = "sudo rpm -qa --qf '%{NAME}-%{VERSION}-%{RELEASE} %{SIGPGP:pgpsig}\n'|grep -v gpg-pubkey|awk -F' ' '{print $NF}'|sort|uniq|wc -l"
@@ -320,14 +332,20 @@ def test_stage1_check_rhel_version(test_instance):
         test_instance.skipTest('not run in SAP AMIs')
     if 'Atomic' in aminame:
         test_instance.skipTest('not run in Atomic AMIs')
+    if is_fedora(test_instance):
+        release_file = 'fedora-release'
+    else:
+        release_file = 'redhat-release'
     product_id = get_product_id(test_instance)
-    cmd = "sudo rpm -q --qf '%{VERSION}' --whatprovides redhat-release"
+    cmd = "sudo rpm -q --qf '%{VERSION}' --whatprovides " + release_file
     run_cmd(test_instance,cmd, expect_kw=product_id, msg='check redhat-release version match')
     if product_id not in aminame:
         test_instance.fail('{} not found in ami name: {}'.format(product_id, aminame))
     test_instance.log.info('{} found in ami name: {}'.format(product_id, aminame))
 
 def test_stage1_check_rhui_pkg(test_instance):
+    if is_fedora(test_instance):
+        test_instance.skipTest('skip run in Fedora AMIs as no rhui pkg required')
     aminame = test_instance.info['name']
     if 'HA' in aminame:
         test_instance.log.info('HA AMI found')
@@ -397,8 +415,10 @@ def test_stage1_check_yum_plugins(test_instance):
     '''
     if 'ATOMIC' in test_instance.info['name'].upper():
         test_instance.skipTest('skip run in Atomic AMIs')
+    if is_fedora(test_instance):
+        test_instance.skipTest('skip run in Fedora AMIs')
     product_id = get_product_id(test_instance)
-    if product_id < '8.4':
+    if float(product_id) < float('8.4'):
         expect_kw="enabled=0"
         status = 'disabled'
     else:

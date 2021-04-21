@@ -1,5 +1,6 @@
 import json
 from ami_val.libs import utils_lib, resource_class, aws_lib
+import re
 
 def test_stage0_check_aminame(test_instance):
     test_instance.log.info("Details:{}".format(json.dumps(test_instance.info, indent=4)))
@@ -12,6 +13,12 @@ def test_stage0_check_aminame(test_instance):
         if 'HA' in aminame:
             if 'arm64' in aminame:
                 test_instance.fail('We don’t support aarch64 in RHEL HA(mail confirmed), so no need to include it in push task')
+    elif utils_lib.is_fedora(test_instance):
+        ami_format = 'Fedora-Cloud-Base-[\d]{2}-[\d]{8}.n.[\d].(?:aarch64|x86_64)'
+        if re.match(ami_format, aminame):
+            test_instance.log.info('{} check pass'.format(aminame))
+        else:
+            test_instance.fail('{} not match {}'.format(aminame, ami_format))
     else:
         test_instance.fail('RHEL is expected in AMI name but get {} in push task'.format(aminame))
 
@@ -38,3 +45,5 @@ def test_stage0_launch_instance(test_instance):
     if vm.create():
         test_instance.vm = vm
         test_instance.ssh_client = vm.new_ssh_client()
+        if test_instance.ssh_client is None:
+            test_instance.fail("No ssh connection created")

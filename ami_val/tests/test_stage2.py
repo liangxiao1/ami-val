@@ -44,7 +44,7 @@ def test_stage2_check_ha_specific(test_instance):
         test_instance.skipTest('only run in HA AMIs or RHEL-8+ SAP AMIs')
 
     product_id = get_product_id(test_instance)
-    if product_id < '8' and 'SAP' in test_instance.info['name']:
+    if float(product_id) < float('8') and 'SAP' in test_instance.info['name']:
         test_instance.skipTest('skip in earlier than el8 SAP AMIs')
     script_dir = os.path.realpath(ami_val.__file__)
     script_dir = os.path.dirname(script_dir)

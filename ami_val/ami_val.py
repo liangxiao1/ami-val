@@ -169,13 +169,11 @@ def main():
                         pass
         else:
             for ts in all_ts:
-                if ts.vm is None and 'stage0' not in ts.casename:
-                    ts.skipTest("Cannot create instance in {}".format(ts.info['region'], is_raise=False ))
-                    continue
-                if ts.ssh_client is None and 'stage0' not in ts.casename:
-                    ts.skipTest("Cannot make ssh connection in {}".format(ts.info['region'], is_raise=False))
-                    continue
                 try:
+                    if ts.vm is None and 'stage0' not in ts.casename:
+                        ts.skipTest("Cannot create instance in {}".format(ts.info['region'], is_raise=False ))
+                    if ts.ssh_client is None and 'stage0' not in ts.casename:
+                        ts.skipTest("Cannot make ssh connection in {}".format(ts.info['region'], is_raise=False))
                     case_run(ts)
                 except FailException as exc:
                     pass

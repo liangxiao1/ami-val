@@ -624,7 +624,7 @@ def is_cmd_exist(test_instance, cmd=None, is_install=True, cancel_case=False):
     pkg_find = "sudo yum provides %s" % cmd
     output = run_cmd(test_instance, pkg_find, expect_ret=0)
     for i in [arch, 'noarch']:
-        pkg_list = re.findall(".*%s" % i, output)
+        pkg_list = re.findall("[^\s]+%s" % i, output)
         if len(pkg_list) > 0:
             break
     if len(pkg_list) == 0:
@@ -883,6 +883,21 @@ new one", same_rate)
 def get_product_id(test_instance):
     check_cmd = "sudo cat /etc/redhat-release"
     output = run_cmd(test_instance,check_cmd, expect_ret=0, msg='check release name')
-    product_id = re.findall('\d.\d', output)[0]
+    product_id = re.findall('[\d.]{2,3}', output)[0]
     test_instance.log.info("Get product id: {}".format(product_id))
     return product_id
+
+def is_fedora(test_instance):
+    aminame = test_instance.info['name']
+    if 'Fedora' in aminame:
+        test_instance.log.info('Fedora AMI found from name:{}'.format(aminame))
+    else:
+        return False
+    if test_instance.vm is not None:
+        check_cmd = "sudo cat /etc/redhat-release"
+        output = run_cmd(test_instance,check_cmd, expect_ret=0, msg='check release name')
+        if 'Fedora' in output:
+            test_instance.log.info('Fedora system found inside AMI {}'.format(aminame))
+        else:
+            return False
+    return True

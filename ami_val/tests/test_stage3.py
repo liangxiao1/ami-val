@@ -2,7 +2,7 @@ import os
 import sys
 import time
 import json
-from ami_val.libs.utils_lib import run_cmd, get_product_id
+from ami_val.libs.utils_lib import run_cmd, get_product_id, is_fedora
 import ami_val
 import re
 
@@ -34,7 +34,11 @@ def test_stage3_check_yum_repoinfo(test_instance):
     if 'RHEL-6' in test_instance.info['name'].upper():
         test_instance.skipTest('skip in el6 as no yum repoinfo subcommand')
     cmd = "sudo yum repoinfo"
-    run_cmd(test_instance, cmd, expect_ret=0, expect_not_kw='Repo-pkgs          : 0', timeout=1200, msg='try to get repo info')
+    if is_fedora(test_instance):
+        # fedora updates repo Repo-pkgs is 0 maybe because of no updates in developing
+        run_cmd(test_instance, cmd, expect_ret=0, timeout=1200, msg='try to get repo info')
+    else:
+        run_cmd(test_instance, cmd, expect_ret=0, expect_not_kw='Repo-pkgs          : 0', timeout=1200, msg='try to get repo info')
 
 def test_stage3_test_yum_package_install(test_instance):
     if 'ATOMIC' in test_instance.info['name'].upper():
@@ -66,8 +70,10 @@ def test_stage3_test_subscription_manager_auto(test_instance):
     '''
     if 'ATOMIC' in test_instance.info['name'].upper():
         test_instance.skipTest('skip in Atomic AMIs')
+    if is_fedora(test_instance):
+        test_instance.skipTest('skip run in Fedora AMIs')
     product_id = get_product_id(test_instance)
-    if product_id < '8.4':
+    if float(product_id) < float('8.4'):
         test_instance.skipTest('skip in earlier than el8.4')
 
     cmd = "sudo subscription-manager config"
