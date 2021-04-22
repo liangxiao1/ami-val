@@ -24,6 +24,20 @@ def test_stage1_check_cds_hostnames(test_instance):
         cmd = "sudo getent hosts {}".format(cds)
         run_cmd(test_instance, cmd, expect_ret=0, msg='check {}'.format(cds))
 
+def test_check_cloudinit_cfg_no_wheel(test_instance):
+        '''
+        bz: 1549638
+        cm: 01965459
+        polarion_id:
+        des: make sure there is no wheel in default_user's group in "/etc/cloud/cloud.cfg"
+        '''
+        cmd = 'sudo cat /etc/cloud/cloud.cfg'
+        run_cmd(test_instance,
+                    cmd,
+                    expect_ret=0,
+                    expect_not_kw='wheel',
+                    msg='check /etc/cloud/cloud.cfg to make sure no wheel in default_user group(bz1549638)')
+
 def test_stage1_check_chrony_aws(test_instance):
     '''
     rhbz: 1679763 [RFE] AWS AMI - Add Amazon Timesync Service
