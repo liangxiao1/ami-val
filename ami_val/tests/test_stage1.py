@@ -79,6 +79,21 @@ def test_stage1_check_cmdline_ifnames(test_instance):
         test_instance.skipTest('not required in el6')
     run_cmd(test_instance, "sudo cat /proc/cmdline", expect_ret=0, expect_kw='net.ifnames=0', msg='check ifnames is specified')
 
+def test_stage1_check_cmdline_iommu_strict(test_instance):
+    '''
+    rhbz: 1836058
+    des: use "iommu.strict=0" in arm AMIs to get better performance
+    '''
+    aminame = test_instance.info['name']
+    product_id = get_product_id(test_instance)
+    if float(product_id) < float('8.5') and 'Atomic' not in aminame:
+        test_instance.skipTest('skip in earlier than el8.4 AMIs')
+    option = 'iommu.strict=0'
+    if is_arch(test_instance,arch='x86'):
+        run_cmd(test_instance, "sudo cat /proc/cmdline", expect_ret=0, expect_not_kw=option, msg='check no {} in x86 AMIs'.format(option))
+    else:
+        run_cmd(test_instance, "sudo cat /proc/cmdline", expect_ret=0, expect_kw=option, msg='check {} in arm AMIs'.format(option))
+
 def test_stage1_check_cmdline_nouveau(test_instance):
     '''
     rhbz: 1645772
