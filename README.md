@@ -2,7 +2,7 @@
 
 ## Introduction
 
-ami-val is a lightweight, fast check and tests collection for AMIs.
+ami-val is a lightweight, fast tests collection for AMIs.
 
 ## Installation
 
