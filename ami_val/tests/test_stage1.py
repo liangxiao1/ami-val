@@ -24,6 +24,18 @@ def test_stage1_check_cds_hostnames(test_instance):
         cmd = "sudo getent hosts {}".format(cds)
         run_cmd(test_instance, cmd, expect_ret=0, msg='check {}'.format(cds))
 
+def test_check_cloudinit_cfg_growpart(test_instance):
+        '''
+        bz: 966888
+        des: make sure there is growpart in cloud_init_modules group in "/etc/cloud/cloud.cfg"
+        '''
+        cmd = 'sudo cat /etc/cloud/cloud.cfg'
+        run_cmd(test_instance,
+                    cmd,
+                    expect_ret=0,
+                    expect_kw='- growpart',
+                    msg='check /etc/cloud/cloud.cfg to make sure there is growpart in cloud_init_modules(bz966888)')
+
 def test_check_cloudinit_cfg_no_wheel(test_instance):
         '''
         bz: 1549638
@@ -141,6 +153,28 @@ def test_stage1_check_cpu_num(test_instance):
     cmd = "sudo cat /proc/cpuinfo | grep '^processor' | wc -l"
     run_cmd(test_instance, cmd, expect_ret=0, expect_kw=str(cpucount), msg='check online cpu match spec define')
 
+def test_stage1_check_dracut_conf_sgdisk(test_instance):
+    '''
+    des: enable resizing on copied AMIs, added 'install_items+=" sgdisk "' to "/etc/dracut.conf.d/sgdisk.conf"
+    '''
+    cmd = "rpm -q gdisk"
+    run_cmd(test_instance, cmd, expect_ret=0, msg='Check if gdisk is installed')
+
+    cmd = "sudo cat /etc/dracut.conf.d/sgdisk.conf"
+    run_cmd(test_instance, cmd, expect_ret=0, expect_kw='install_items+=" sgdisk "', msg='check if sgdisk is added into amis')
+
+def test_stage1_check_dracut_conf_xen(test_instance):
+    '''
+    rhbz: 1849082
+    des: add ' xen-netfront xen-blkfront ' to '/etc/dracut.conf.d/xen.conf' in x86 AMIs
+         and not required in arm AMIs
+    '''
+    cmd = "sudo cat /etc/dracut.conf.d/xen.conf"
+    if is_arch(test_instance, arch='x86_64'):
+        run_cmd(test_instance, cmd, expect_ret=0, expect_kw=' xen-netfront xen-blkfront ', msg='check if xen-netfront and xen-blkfront are added into x86 amis')
+    else:
+        run_cmd(test_instance, cmd, expect_not_ret=0, msg='check no /etc/dracut.conf.d/xen.conf in arm amis')
+
 def test_stage1_check_ena_set_in_image(test_instance):
     '''
     check the number of cpu cores available
@@ -188,6 +222,14 @@ def test_stage1_check_grub(test_instance):
     out = run_cmd(test_instance, cmd, expect_ret=0, msg='get grub.conf')
     if r"hd0,0" not in out:
         test_instance.fail("'hd0,0' not found in grub.conf")
+
+def test_stage1_check_hosts(test_instance):
+    '''
+    des: localhost ipv6 and ipv4 should be set in /etc/hosts
+    '''
+    expect_kws = '127.0.0.1   localhost localhost.localdomain localhost4 localhost4.localdomain4,::1         localhost localhost.localdomain localhost6 localhost6.localdomain6'
+    cmd = "sudo cat /etc/hosts"
+    run_cmd(test_instance, cmd, expect_ret=0, expect_kw=expect_kws, msg='check /etc/hosts')
 
 def test_stage1_check_inittab(test_instance):
     '''
@@ -295,6 +337,19 @@ def test_stage1_check_network_setup(test_instance):
     run_cmd(test_instance, 'grep "^NETWORKING=yes" /etc/sysconfig/network', expect_ret=0, msg='check /etc/sysconfig/network')
     run_cmd(test_instance, 'egrep "^DEVICE=(|\\\")eth0(|\\\")" /etc/sysconfig/network-scripts/ifcfg-eth0', expect_ret=0, msg='check eth0 used')
 
+
+def test_stage1_check_nm_cloud_setup(test_instance):
+    '''
+    rhbz: 1822853
+    des: check NetworkManager-cloud-setup is installed and nm-cloud-setup is enabled
+    '''
+    cmd = "rpm -q NetworkManager-cloud-setup"
+    run_cmd(test_instance, cmd, expect_ret=0, msg='Check if NetworkManager-cloud-setup is installed')
+    cmd = "sudo systemctl is-enabled nm-cloud-setup"
+    run_cmd(test_instance, cmd, expect_ret=0, msg='Check if nm-cloud-setup is enabled')
+    cmd = "sudo cat /etc/systemd/system/nm-cloud-setup.service.d/10-rh-enable-for-ec2.conf"
+    run_cmd(test_instance, cmd, expect_kw='Environment=NM_CLOUD_SETUP_EC2=yes', msg='Check if NM_CLOUD_SETUP_EC2 is set')
+
 def test_stage1_check_no_avc_denials(test_instance):
     '''
     check there is no avc denials (selinux)
@@ -337,6 +392,39 @@ def test_stage1_check_pkg_signed(test_instance):
     run_cmd(test_instance, cmd, expect_ret=0, expect_not_kw='none', msg='check no pkg signature is none')
     cmd = "sudo rpm -qa --qf '%{NAME}-%{VERSION}-%{RELEASE} %{SIGPGP:pgpsig}\n'|grep -v gpg-pubkey|awk -F' ' '{print $NF}'|sort|uniq|wc -l"
     run_cmd(test_instance, cmd, expect_ret=0, expect_kw='1', msg='check use only one keyid')
+
+def test_stage1_check_pkg_unwanted(test_instance):
+    '''
+    Some pkgs are not required in ec2.
+    '''
+    pkgs_unwanted = '''aic94xx-firmware,alsa-firmware,alsa-lib,alsa-tools-firmware,ivtv-firmware,iwl1000-firmware,
+iwl100-firmware,iwl105-firmware,iwl135-firmware,iwl2000-firmware,iwl2030-firmware,iwl3160-firmware,
+iwl3945-firmware,iwl4965-firmware,iwl5000-firmware,iwl5150-firmware,iwl6000-firmware,iwl6000g2a-firmware,
+iwl6000g2b-firmware,iwl6050-firmware,iwl7260-firmware,libertas-sd8686-firmware,libertas-sd8787-firmware,
+libertas-usb8388-firmware,firewalld,biosdevname,plymouth,iprutils'''.split(',')
+    pkgs_unwanted = [ x.strip('\n') for x in pkgs_unwanted ]
+    for pkg in pkgs_unwanted:
+        cmd = 'rpm -q {}'.format(pkg)
+        run_cmd(test_instance, cmd, expect_not_ret=0, msg='check {} not installed'.format(pkg))
+
+def test_stage1_check_pkg_wanted(test_instance):
+    '''
+    Some pkgs are required in ec2.
+    '''
+    pkgs_wanted = '''kernel,yum-utils,redhat-release,redhat-release-eula,cloud-init,
+tar,rsync,dhcp-client,NetworkManager,NetworkManager-cloud-setup,cloud-utils-growpart,
+gdisk,insights-client,dracut-config-generic,dracut-norescue,grub2'''.split(',')
+    pkgs_wanted = [ x.strip('\n') for x in pkgs_wanted ]
+    if 'HA' in test_instance.info['name']:
+        pkgs_wanted.append('fence-agents-all')
+        pkgs_wanted.append('pacemaker')
+        pkgs_wanted.append('pcs')
+    if 'SAP' in test_instance.info['name']:
+        pkgs_wanted.append('ansible')
+        pkgs_wanted.append('rhel-system-roles-sap')
+    for pkg in pkgs_wanted:
+        cmd = 'rpm -q {}'.format(pkg)
+        run_cmd(test_instance, cmd, expect_ret=0, msg='check {} installed'.format(pkg))
 
 def test_stage1_check_product_id(test_instance):
     '''
@@ -423,12 +511,30 @@ def test_stage1_check_sshd(test_instance):
     cmd = 'sudo cat /etc/ssh/sshd_config'
     run_cmd(test_instance, cmd, expect_ret=0, expect_kw='PasswordAuthentication no', msg='check if password auth disabled')
 
+def test_stage1_check_sysconfig_kernel(test_instance):
+    '''
+    des: UPDATEDEFAULT=yes and DEFAULTKERNEL=kernel should be set in /etc/sysconfig/kernel
+    '''
+    expect_kws = 'UPDATEDEFAULT=yes,DEFAULTKERNEL=kernel'
+    cmd = "sudo cat /etc/sysconfig/kernel"
+    run_cmd(test_instance, cmd, expect_ret=0, expect_kw=expect_kws, msg='check /etc/sysconfig/kernel')
+
 def test_stage1_check_timezone(test_instance):
     '''
     rhbz: 1187669
     check that the default timezone is set to UTC
     '''
     run_cmd(test_instance, 'date', expect_kw='UTC', msg='check timezone is set to UTC')
+
+def test_stage1_check_udev_kernel(test_instance):
+    '''
+    des: /etc/udev/rules.d/80-net-name-slot.rules link to /dev/null
+    '''
+    expect_kws = '/dev/null'
+    cmd = "sudo ls -l /etc/udev/rules.d/80-net-name-slot.rules"
+    run_cmd(test_instance, cmd, expect_ret=0, expect_kw=expect_kws, msg='check /etc/udev/rules.d/80-net-name-slot.rules')
+    cmd = 'sudo cat /etc/udev/rules.d/70-persistent-net.rules'
+    run_cmd(test_instance, cmd, expect_ret=0,msg='check /etc/udev/rules.d/70-persistent-net.rules')
 
 def test_stage1_check_username(test_instance):
     for user in ['fedora', 'cloud-user']:

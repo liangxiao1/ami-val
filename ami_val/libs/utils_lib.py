@@ -419,9 +419,9 @@ def run_cmd(test_instance,
     if expect_kw is not None:
         for key_word in expect_kw.split(','):
             if output.count('\n') > 5:
-                find_list = re.findall('.*{}.*\n'.format(key_word), output)
+                find_list = re.findall('.*{}.*\n'.format(re.escape(key_word)), output)
             else:
-                find_list = re.findall('.*{}.*'.format(key_word), output)
+                find_list = re.findall('.*{}.*'.format(re.escape(key_word)), output)
             if len(find_list) > 0:
                 test_instance.log.info('expcted "{}" found in "{}"'.format(key_word, ''.join(find_list)))
             else:
@@ -432,9 +432,9 @@ def run_cmd(test_instance,
     if expect_not_kw is not None:
         for key_word in expect_not_kw.split(','):
             if output.count('\n') > 5:
-                find_list = re.findall('.*{}.*\n'.format(key_word), output)
+                find_list = re.findall('.*{}.*\n'.format(re.escape(key_word)), output)
             else:
-                find_list = re.findall('.*{}.*'.format(key_word), output)
+                find_list = re.findall('.*{}.*'.format(re.escape(key_word)), output)
             if len(find_list) == 0:
                 test_instance.log.info('Unexpcted "{}" not found in output'.format(key_word))
             else:
