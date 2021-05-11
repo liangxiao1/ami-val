@@ -8,7 +8,7 @@ ami-val is a lightweight, fast tests collection for AMIs.
 
 ### Install from pip
 
-`# pip install ami-val`
+`# pip3 install ami-val`
 
 ### Install from source code
 

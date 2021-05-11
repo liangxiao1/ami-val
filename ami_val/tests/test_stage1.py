@@ -343,6 +343,9 @@ def test_stage1_check_nm_cloud_setup(test_instance):
     rhbz: 1822853
     des: check NetworkManager-cloud-setup is installed and nm-cloud-setup is enabled
     '''
+    product_id = get_product_id(test_instance)
+    if float(product_id) < float('8.4'):
+        test_instance.skipTest('skip it prior to el8.4')
     cmd = "rpm -q NetworkManager-cloud-setup"
     run_cmd(test_instance, cmd, expect_ret=0, msg='Check if NetworkManager-cloud-setup is installed')
     cmd = "sudo systemctl is-enabled nm-cloud-setup"
@@ -403,6 +406,10 @@ iwl3945-firmware,iwl4965-firmware,iwl5000-firmware,iwl5150-firmware,iwl6000-firm
 iwl6000g2b-firmware,iwl6050-firmware,iwl7260-firmware,libertas-sd8686-firmware,libertas-sd8787-firmware,
 libertas-usb8388-firmware,firewalld,biosdevname,plymouth,iprutils'''.split(',')
     pkgs_unwanted = [ x.strip('\n') for x in pkgs_unwanted ]
+    product_id = get_product_id(test_instance)
+    if float(product_id) > float('8.3'):
+        # rhbz 1888695 [rhel-8.4] Do not install rng-tools by default
+        pkgs_unwanted.append('rng-tools')
     for pkg in pkgs_unwanted:
         cmd = 'rpm -q {}'.format(pkg)
         run_cmd(test_instance, cmd, expect_not_ret=0, msg='check {} not installed'.format(pkg))
@@ -410,11 +417,20 @@ libertas-usb8388-firmware,firewalld,biosdevname,plymouth,iprutils'''.split(',')
 def test_stage1_check_pkg_wanted(test_instance):
     '''
     Some pkgs are required in ec2.
+    https://kernel.googlesource.com/pub/scm/boot/dracut/dracut/+/18e61d3d41c8287467e2bc7178f32d188affc920%5E!/
+    dracut-nohostonly -> dracut-config-generic
+    dracut-norescue   -> dracut
+                      -> dracut-config-rescue 
     '''
     pkgs_wanted = '''kernel,yum-utils,redhat-release,redhat-release-eula,cloud-init,
 tar,rsync,dhcp-client,NetworkManager,NetworkManager-cloud-setup,cloud-utils-growpart,
-gdisk,insights-client,dracut-config-generic,dracut-norescue,grub2'''.split(',')
+gdisk,insights-client,dracut-config-generic,dracut-config-rescue,grub2-tools'''.split(',')
     pkgs_wanted = [ x.strip('\n') for x in pkgs_wanted ]
+    product_id = get_product_id(test_instance)
+    if float(product_id) < float('8.4'):
+        pkgs_wanted.remove('NetworkManager-cloud-setup')
+    if float(product_id) < float('8.4') and float(product_id) >= float('8.0'):
+        pkgs_wanted.append('rng-tools')
     if 'HA' in test_instance.info['name']:
         pkgs_wanted.append('fence-agents-all')
         pkgs_wanted.append('pacemaker')
@@ -443,10 +459,6 @@ def test_stage1_check_rhel_version(test_instance):
     check if rhel provider matches /etc/redhat-release and ami name
     '''
     aminame = test_instance.info['name']
-    if 'HA' in aminame:
-        test_instance.skipTest('not run in HA AMIs')
-    if 'SAP' in aminame:
-        test_instance.skipTest('not run in SAP AMIs')
     if 'Atomic' in aminame:
         test_instance.skipTest('not run in Atomic AMIs')
     if is_fedora(test_instance):

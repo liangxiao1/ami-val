@@ -12,15 +12,19 @@ import concurrent.futures
 import signal
 import traceback
 
+ALL_TS = []
+
 def sig_handler(signum, frame):
     print('Got signal {}, call cleanup and exit!'.format(signum))
-    #cleanup_paralle()
+    cleanup_paralle(ALL_TS)
     sys.exit(0)
 
 def cleanup_paralle(ts_list):
+    #Sending SIGTERM (CTRL+c, KeyboardInterrupt) while Python is waiting in threading.Thread.join() is not supported.
+    # so set the timeout to 60
     with concurrent.futures.ThreadPoolExecutor(max_workers=20) as executor:
         all_jobs = {executor.submit(cleanup_single, ts): ts for ts in ts_list}
-        for r in concurrent.futures.as_completed(all_jobs):
+        for r in concurrent.futures.as_completed(all_jobs, timeout=60):
             x = all_jobs[r]
             try:
                 data = r.result()
@@ -95,7 +99,6 @@ def main():
     if not args.is_clean:
         shutil.copy(amis_file, resource_file )
     ec2_profile = 'default'
-    all_ts = []
     with open(amis_file) as fh:
         try:
             amis_dict = json.load(fh)
@@ -115,7 +118,7 @@ def main():
                 ec2_profile = 'aws'
             ts.profile_name = ec2_profile
             ts.resource_file = resource_file
-            all_ts.append(ts)
+            ALL_TS.append(ts)
 
     print("Use profile:{}".format(ec2_profile))
     print("resource {}".format(resource_file))
@@ -127,7 +130,7 @@ def main():
                     instance_id = r['instance_id']
                     region = r['region']
                     ami_id = r['ami']
-                    for ts in all_ts:
+                    for ts in ALL_TS:
                         if ts.info['ami'] == ami_id:
                             init_ts_vm(ts, instance_id=instance_id)
                             if ts.vm is not None:
@@ -144,7 +147,7 @@ def main():
         print("Running {} ({}/{})".format(case, i, len(found_cases)))
         case_run = eval(case)
         i+=1
-        for ts in all_ts:
+        for ts in ALL_TS:
             ts.casename = case
             ts.debuglog = "{}/debug/{}_{}.log".format(logdir, ts.info["ami"], case)
             ts.log.logfile = ts.debuglog
@@ -152,8 +155,8 @@ def main():
         # run test in paralle or sequence
         if args.is_paralle:
             with concurrent.futures.ThreadPoolExecutor(max_workers=20) as executor:
-                all_jobs = {executor.submit(case_run, ts): ts for ts in all_ts if 'stage0' in ts.casename or ts.vm is not None}
-                for r in concurrent.futures.as_completed(all_jobs):
+                all_jobs = {executor.submit(case_run, ts): ts for ts in ALL_TS if 'stage0' in ts.casename or ts.vm is not None}
+                for r in concurrent.futures.as_completed(all_jobs,  timeout=1200):
                     ts = all_jobs[r]
                     try:
                         data = r.result()
@@ -168,7 +171,7 @@ def main():
                     else:
                         pass
         else:
-            for ts in all_ts:
+            for ts in ALL_TS:
                 try:
                     if ts.vm is None and 'stage0' not in ts.casename:
                         ts.skipTest("Cannot create instance in {}".format(ts.info['region'], is_raise=False ))
@@ -181,7 +184,7 @@ def main():
                     pass
                 except Exception as exc:
                     ts.fail(traceback.format_exc(), is_raise=False)
-        for ts in all_ts:
+        for ts in ALL_TS:
             ts.load_resource()
             if 'instance_types_list' in ts.resource_info.keys() and len(ts.resource_info['instance_types_list']) == 0:
                 ts.skipTest("No supported instance in {}".format(ts.info['region']), is_raise=False)
@@ -196,18 +199,17 @@ def main():
                 ts.skipTest("Cannot make ssh connection in {}".format(ts.info['region']), is_raise=False)
                 continue
         # save tests result
-        for ts in all_ts:
+        for ts in ALL_TS:
             ts.log.info('Finish {} {} {} result:{}'.format(ts.info["region"], ts.info["ami"], ts.casename, ts.result))
             ts.sum_log(result=ts.result, error=ts.error)
             #print("{}:{}:{}".format(ts.info['ami'],ts.casename,ts.result))
             ts.result = 'PASS'
             ts.error = ''
-    #cleanup(all_ts)
-    print("Total case num:{} Tested AMIs:{}".format(len(found_cases), len(all_ts)))
+    print("Total case num:{} Tested AMIs:{}".format(len(found_cases), len(ALL_TS)))
     print("Log dir:{}".format(logdir))
     utils_lib.write_html(sum_log, region_missed=region_missed, region_uploaded=region_uploaded)
     print("Please wait resource cleanup done......")
-    cleanup_paralle(all_ts)
+    cleanup_paralle(ALL_TS)
 
 if __name__ == "__main__":
     main()

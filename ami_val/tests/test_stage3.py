@@ -94,13 +94,19 @@ def test_stage3_test_subscription_manager_auto(test_instance):
         run_cmd(test_instance, cmd, msg='try to check rhsm.log')
         cmd = "sudo subscription-manager identity"
         out = run_cmd(test_instance, cmd, msg='try to check subscription identity')
+        cmd = "sudo subscription-manager list --installed"
+        out = run_cmd(test_instance, cmd, msg='try to list currently installed on the system')
         cmd = "sudo subscription-manager status"
         out = run_cmd(test_instance, cmd, msg='try to check subscription status')
-        if 'Red Hat Enterprise Linux' in out:
+        if 'Red Hat Enterprise Linux' in out or 'Simple Content Access' in out:
             test_instance.log.info("auto subscription registered completed")
+            cmd = "sudo insights-client --register"
+            run_cmd(test_instance, cmd, msg='check if insights-client can register successfully')
             break
         end_time = time.time()
         if end_time - start_time > timeout:
+            cmd = "sudo insights-client --register"
+            run_cmd(test_instance, cmd, msg='check if insights-client can register successfully')
             test_instance.fail("timeout({}s) to wait auto subscription registered completed".format(timeout))
         test_instance.log.info('wait {}s and try to check again, timeout {}s'.format(interval, timeout))
         time.sleep(interval)

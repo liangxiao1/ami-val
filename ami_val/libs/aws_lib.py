@@ -459,7 +459,7 @@ def aws_check_all_regions(profile=None, is_paralle=True, log=None, resource_file
     if is_paralle:
         with concurrent.futures.ThreadPoolExecutor(max_workers=20) as executor:
             all_jobs = {executor.submit(aws_import_key, region['RegionName'], profile, keyname, pubkeyfile): region for region in region_list}
-            for r in concurrent.futures.as_completed(all_jobs):
+            for r in concurrent.futures.as_completed(all_jobs, timeout=1200):
                 x = all_jobs[r]
                 try:
                     data = r.result()
@@ -474,7 +474,7 @@ def aws_check_all_regions(profile=None, is_paralle=True, log=None, resource_file
     if is_paralle:
         with concurrent.futures.ThreadPoolExecutor(max_workers=20) as executor:
             all_jobs = {executor.submit(aws_subnet_find, region['RegionName'], profile=profile, create_new=False): region for region in region_list}
-            for r in concurrent.futures.as_completed(all_jobs):
+            for r in concurrent.futures.as_completed(all_jobs, timeout=1200):
                 x = all_jobs[r]
                 try:
                     data = r.result()
@@ -486,7 +486,7 @@ def aws_check_all_regions(profile=None, is_paralle=True, log=None, resource_file
                     pass
         with concurrent.futures.ThreadPoolExecutor(max_workers=20) as executor:
             all_jobs = {executor.submit(aws_instance_type_find, region['RegionName'], profile=profile, arch='arm64'): region for region in region_list}
-            for r in concurrent.futures.as_completed(all_jobs):
+            for r in concurrent.futures.as_completed(all_jobs, timeout=1200):
                 x = all_jobs[r]
                 try:
                     data = r.result()
@@ -498,7 +498,7 @@ def aws_check_all_regions(profile=None, is_paralle=True, log=None, resource_file
                     pass
         with concurrent.futures.ThreadPoolExecutor(max_workers=20) as executor:
             all_jobs = {executor.submit(aws_instance_type_find, region['RegionName'], profile=profile, arch='x86_64'): region for region in region_list}
-            for r in concurrent.futures.as_completed(all_jobs):
+            for r in concurrent.futures.as_completed(all_jobs, timeout=1200):
                 x = all_jobs[r]
                 try:
                     data = r.result()
