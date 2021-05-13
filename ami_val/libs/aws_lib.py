@@ -401,7 +401,7 @@ def aws_import_key(region=None, profile=None, keyname=None, pubkeyfile=None, log
         log.info("{} exists.".format(keyname))
         return True
     except Exception as exc:
-        log.info("{} not found with error{}".format(exc))
+        log.info("{} not found with error {}".format(keyname,exc))
 
     pubkeystr = None
     if not os.path.exists(pubkeyfile):
