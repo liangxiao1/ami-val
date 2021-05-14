@@ -21,8 +21,10 @@ def test_stage1_check_cds_hostnames(test_instance):
                           "rhui3-cds02.{}.aws.ce.redhat.com".format(test_instance.info['region']),
                           "rhui3-cds03.{}.aws.ce.redhat.com".format(test_instance.info['region'])]
     for cds in rhui_cds_hostnames:
-        cmd = "sudo getent hosts {}".format(cds)
-        run_cmd(test_instance, cmd, expect_ret=0, msg='check {}'.format(cds))
+        #there is no rhui in us-gov regions at all - all the content requests are redirected to closest standard regions
+        cds_name = cds.replace('-gov','')
+        cmd = "sudo getent hosts {}".format(cds_name)
+        run_cmd(test_instance, cmd, expect_ret=0, msg='check {}'.format(cds_name))
 
 def test_check_cloudinit_cfg_growpart(test_instance):
         '''
@@ -410,6 +412,8 @@ libertas-usb8388-firmware,firewalld,biosdevname,plymouth,iprutils'''.split(',')
     if float(product_id) > float('8.3'):
         # rhbz 1888695 [rhel-8.4] Do not install rng-tools by default
         pkgs_unwanted.append('rng-tools')
+    if 'SAP' in test_instance.info['name']:
+        pkgs_unwanted.remove('alsa-lib')
     for pkg in pkgs_unwanted:
         cmd = 'rpm -q {}'.format(pkg)
         run_cmd(test_instance, cmd, expect_not_ret=0, msg='check {} not installed'.format(pkg))
@@ -432,12 +436,19 @@ gdisk,insights-client,dracut-config-generic,dracut-config-rescue,grub2-tools'''.
     if float(product_id) < float('8.4') and float(product_id) >= float('8.0'):
         pkgs_wanted.append('rng-tools')
     if 'HA' in test_instance.info['name']:
-        pkgs_wanted.append('fence-agents-all')
-        pkgs_wanted.append('pacemaker')
-        pkgs_wanted.append('pcs')
+        pkgs_wanted.extend(['fence-agents-all', 'pacemaker', 'pcs'])
     if 'SAP' in test_instance.info['name']:
-        pkgs_wanted.append('ansible')
-        pkgs_wanted.append('rhel-system-roles-sap')
+        pkgs_wanted.extend(['rhel-system-roles-sap', 'ansible'])
+        #BZ:1959813
+        pkgs_wanted.extend(['bind-utils', 'compat-sap-c++-9', 'nfs-utils', 'tcsh'])
+        #BZ:1959813
+        pkgs_wanted.append('uuidd')
+        #BZ: 1959923, 1961168
+        pkgs_wanted.extend(['cairo', 'expect', 'graphviz', 'gtk2', 'iptraf-ng', 'krb5-workstation', 'libaio'])
+        pkgs_wanted.extend(['libatomic', 'libcanberra-gtk2', 'libicu', 'libpng12', 'libtool-ltdl', 'lm_sensors', 'net-tools'])
+        pkgs_wanted.extend(['numactl', 'PackageKit-gtk3-module', 'xorg-x11-xauth', 'libnsl'])
+        #BZ:1959962
+        pkgs_wanted.append('tuned-profiles-sap-hana')
     for pkg in pkgs_wanted:
         cmd = 'rpm -q {}'.format(pkg)
         run_cmd(test_instance, cmd, expect_ret=0, msg='check {} installed'.format(pkg))

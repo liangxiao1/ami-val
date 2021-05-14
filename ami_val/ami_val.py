@@ -192,8 +192,8 @@ def main():
             if ts.vm is None and 'instance_types_list' in ts.resource_info.keys():
                 ts.skipTest("Cannot create instance in {}".format(ts.info['region']), is_raise=False)
                 continue
-            if ts.vm is None and 'instance_types_list' in ts.resource_info.keys():
-                ts.skipTest("Cannot create instance in {}".format(ts.info['region']), is_raise=False)
+            if ts.vm is None and 'stage0' not in ts.casename:
+                ts.skipTest("skip as instance not created {}".format(ts.info['region']), is_raise=False)
                 continue
             if ts.ssh_client is None and 'instance_types_list' in ts.resource_info.keys():
                 ts.skipTest("Cannot make ssh connection in {}".format(ts.info['region']), is_raise=False)

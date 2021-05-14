@@ -61,6 +61,47 @@ def test_stage2_check_libc6_xen_conf(test_instance):
     """
     run_cmd(test_instance, 'sudo test -f /etc/ld.so.conf.d/libc6-xen.conf', expect_ret=1, msg='check for /etc/ld.so.conf.d/libc6-xen.conf absence on RHEL')
 
+def test_stage2_check_sap_security_limits(test_instance):
+    #bz: 1959963
+    if 'SAP' not in test_instance.info['name']:
+        test_instance.skipTest('only run in SAP AMIs')
+    expected_cfg =  '@sapsys    hard    nofile   65536,\
+@sapsys    soft    nofile   65536,\
+@dba       hard    nofile   65536,\
+@dba       soft    nofile   65536,\
+@sapsys    hard    nproc    unlimited,\
+@sapsys    soft    nproc    unlimited,\
+@dba       hard    nproc    unlimited,\
+@dba       soft    nproc    unlimited'
+    cmd = 'sudo cat /etc/security/limits.d/99-sap.conf'
+    run_cmd(test_instance, cmd, expect_kw=expected_cfg, msg='check /etc/security/limits.d/99-sap.conf')
+
+def test_stage2_check_sap_sysctl(test_instance):
+    #bz: 1959962
+    if 'SAP' not in test_instance.info['name']:
+        test_instance.skipTest('only run in SAP AMIs')
+    expected_cfg = 'kernel.pid_max = 4194304,vm.max_map_count = 2147483647'
+    cmd = 'sudo cat /etc/sysctl.d/sap.conf'
+    run_cmd(test_instance, cmd, expect_kw=expected_cfg, msg='check /etc/sysctl.d/sap.conf')
+
+def test_stage2_check_sap_tmpfiles(test_instance):
+    #bz: 1959979
+    if 'SAP' not in test_instance.info['name']:
+        test_instance.skipTest('only run in SAP AMIs')
+    expected_cfg =  'x /tmp/.sap*,x /tmp/.hdb*lock,x /tmp/.trex*lock'
+    cmd = 'sudo cat /etc/tmpfiles.d/sap.conf'
+    run_cmd(test_instance, cmd, expect_kw=expected_cfg, msg='check /etc/tmpfiles.d/sap.conf')
+
+def test_stage2_check_sap_tuned(test_instance):
+    #bz: 1959962
+    if 'SAP' not in test_instance.info['name']:
+        test_instance.skipTest('only run in SAP AMIs')
+    expected_cfg =  'sap-hana'
+    cmd = 'sudo cat /etc/tuned/active_profile'
+    run_cmd(test_instance, cmd, expect_kw=expected_cfg, msg='check /etc/tuned/active_profile')
+    cmd = 'sudo tuned-adm active'
+    run_cmd(test_instance, cmd, expect_kw=expected_cfg, msg='check tuned-adm active output')
+
 def test_stage2_check_ttyS0_conf(test_instance):
     """
     bz: 1103344
