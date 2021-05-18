@@ -85,8 +85,8 @@ def test_stage3_test_subscription_manager_auto(test_instance):
     cmd = "sudo systemctl restart rhsmcertd"
     run_cmd(test_instance, cmd, expect_ret=0, msg='restart rhsmcertd')
     start_time = time.time()
-    timeout = 600
-    interval = 60
+    timeout = 360
+    interval = 30
     while True:
         cmd = 'sudo cat /var/log/rhsm/rhsmcertd.log'
         run_cmd(test_instance, cmd, msg='try to check rhsmcertd.log')

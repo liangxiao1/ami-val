@@ -154,9 +154,9 @@ def main():
 
         # run test in paralle or sequence
         if args.is_paralle:
-            with concurrent.futures.ThreadPoolExecutor(max_workers=20) as executor:
+            with concurrent.futures.ThreadPoolExecutor(max_workers=40) as executor:
                 all_jobs = {executor.submit(case_run, ts): ts for ts in ALL_TS if 'stage0' in ts.casename or ts.vm is not None}
-                for r in concurrent.futures.as_completed(all_jobs,  timeout=1200):
+                for r in concurrent.futures.as_completed(all_jobs):
                     ts = all_jobs[r]
                     try:
                         data = r.result()

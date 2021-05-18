@@ -3,6 +3,9 @@ import sys
 import time
 import json
 import re
+import glob
+import filecmp
+import difflib
 from ami_val.libs.utils_lib import run_cmd, is_arch, get_product_id, is_fedora, is_cmd_exist
 
 def test_stage1_check_bash_history(test_instance):
@@ -26,7 +29,7 @@ def test_stage1_check_cds_hostnames(test_instance):
         cmd = "sudo getent hosts {}".format(cds_name)
         run_cmd(test_instance, cmd, expect_ret=0, msg='check {}'.format(cds_name))
 
-def test_check_cloudinit_cfg_growpart(test_instance):
+def test_stage1_check_cloudinit_cfg_growpart(test_instance):
         '''
         bz: 966888
         des: make sure there is growpart in cloud_init_modules group in "/etc/cloud/cloud.cfg"
@@ -38,7 +41,7 @@ def test_check_cloudinit_cfg_growpart(test_instance):
                     expect_kw='- growpart',
                     msg='check /etc/cloud/cloud.cfg to make sure there is growpart in cloud_init_modules(bz966888)')
 
-def test_check_cloudinit_cfg_no_wheel(test_instance):
+def test_stage1_check_cloudinit_cfg_no_wheel(test_instance):
         '''
         bz: 1549638
         cm: 01965459
@@ -107,6 +110,18 @@ def test_stage1_check_cmdline_iommu_strict(test_instance):
         run_cmd(test_instance, "sudo cat /proc/cmdline", expect_ret=0, expect_not_kw=option, msg='check no {} in x86 AMIs'.format(option))
     else:
         run_cmd(test_instance, "sudo cat /proc/cmdline", expect_ret=0, expect_kw=option, msg='check {} in arm AMIs'.format(option))
+
+def test_stage1_check_cmdline_max_cstate(test_instance):
+    '''
+    rhbz: 1961225
+    desc: intel_idle.max_cstate=1 processor.max_cstate=1 exists in SAP AMI's /proc/cmdline.
+    '''
+    aminame = test_instance.info['name']
+    expect_kw = "intel_idle.max_cstate=1,processor.max_cstate=1"
+    if 'SAP' in test_instance.info['name']:
+        run_cmd(test_instance, "sudo cat /proc/cmdline", expect_ret=0, expect_kw=expect_kw, msg='check {} is specified in sap ami'.format(expect_kw))
+    else:
+        run_cmd(test_instance, "sudo cat /proc/cmdline", expect_ret=0, expect_not_kw=expect_kw, msg='check {} is not specified in non-sap ami'.format(expect_kw))
 
 def test_stage1_check_cmdline_nouveau(test_instance):
     '''
@@ -248,6 +263,67 @@ def test_stage1_check_inittab(test_instance):
         out = run_cmd(test_instance, 'uname -r')
         if 'el5' in out:
             run_cmd(test_instance, "grep '^si:' /etc/inittab", expect_kw="si::sysinit:/etc/rc.d/rc.sysinit")
+
+def test_stage1_check_ks_file_asave(test_instance):
+    '''
+    rhbz: n/a
+    save /root/anaconda-ks.cfg for debug purpose.
+    '''
+    aminame = test_instance.info['name']
+    ks_type = None
+    if 'HA' in aminame:
+        test_instance.log.info('HA AMI found')
+        ks_type = 'ha'
+    elif 'SAP' in aminame:
+        test_instance.log.info('SAP AMI found')
+        ks_type = 'sap'
+    else:
+        test_instance.log.info('RHEL AMI found')
+        ks_type = 'vanilla'
+
+    ks_file = "{}/debug/{}_{}_{}_{}_ks.cfg".format(test_instance.logdir, test_instance.info["ami"], test_instance.info["region"], test_instance.info["release"]["arch"], ks_type)
+    run_cmd(test_instance, 'sudo cp /root/anaconda-ks.cfg /tmp', expect_ret=0, msg='copy /root/anaconda-ks.cfg to /tmp')
+    run_cmd(test_instance, 'sudo chmod 666 /tmp/anaconda-ks.cfg', expect_ret=0, msg='change permission')
+    rmt_file = '/tmp/anaconda-ks.cfg'
+    ftp_client = test_instance.ssh_client.open_sftp()
+    ftp_client.get(rmt_file, ks_file)
+    test_instance.log.info("ks file is saved to {}.".format(ks_file))
+    ftp_client.close()
+
+def test_stage1_check_ks_file_compare(test_instance):
+    '''
+    rhbz: n/a
+    compare all images have same ks file content(/root/anaconda-ks.cfg).
+    '''
+    aminame = test_instance.info['name']
+    ks_type = None
+    if 'HA' in aminame:
+        test_instance.log.info('HA AMI found')
+        ks_type = 'ha'
+    elif 'SAP' in aminame:
+        test_instance.log.info('SAP AMI found')
+        ks_type = 'sap'
+    else:
+        test_instance.log.info('RHEL AMI found')
+        ks_type = 'vanilla'
+    src_ks_file = "{}/debug/{}_{}_{}_{}_ks.cfg".format(test_instance.logdir, test_instance.info["ami"], test_instance.info["region"], test_instance.info["release"]["arch"],ks_type)
+    ks_match = "{}/debug/*{}_{}_ks.cfg".format(test_instance.logdir, test_instance.info["release"]["arch"], ks_type)
+    test_instance.log.info("Try to match: {}".format(ks_match))
+    dest_ks_files = glob.glob(ks_match)
+    test_instance.log.info('Under {}/debug/ found {}'.format(test_instance.logdir, dest_ks_files))
+    if len(dest_ks_files) == 1:
+        test_instance.skipTest('skip as only one ks file found')
+    if len(dest_ks_files) == 0:
+        test_instance.skipTest('skip as no ks file found')
+    for dest_ks_file in dest_ks_files:
+        if filecmp.cmp(src_ks_file, dest_ks_file):
+            test_instance.log.info('{} and {} are identical'.format(src_ks_file, dest_ks_file))
+        else:
+            src_text = open(src_ks_file).readlines()
+            dest_text = open(dest_ks_file).readlines()
+            for line in difflib.unified_diff(src_text, dest_text):
+                test_instance.log.info(line)
+            test_instance.fail('{} and {} have diff content, please check'.format(src_ks_file, dest_ks_file))
 
 def test_stage1_check_instance_identity(test_instance):
     '''
@@ -414,6 +490,8 @@ libertas-usb8388-firmware,firewalld,biosdevname,plymouth,iprutils'''.split(',')
         pkgs_unwanted.append('rng-tools')
     if 'SAP' in test_instance.info['name']:
         pkgs_unwanted.remove('alsa-lib')
+    if 'HA' in test_instance.info['name']:
+        pkgs_unwanted.remove('rh-amazon-rhui-client')
     for pkg in pkgs_unwanted:
         cmd = 'rpm -q {}'.format(pkg)
         run_cmd(test_instance, cmd, expect_not_ret=0, msg='check {} not installed'.format(pkg))
@@ -487,6 +565,7 @@ def test_stage1_check_rhui_pkg(test_instance):
     if is_fedora(test_instance):
         test_instance.skipTest('skip run in Fedora AMIs as no rhui pkg required')
     aminame = test_instance.info['name']
+    unwant_rhui = None
     if 'HA' in aminame:
         test_instance.log.info('HA AMI found')
         rhui_pkg = 'rh-amazon-rhui-client-ha'
@@ -499,8 +578,12 @@ def test_stage1_check_rhui_pkg(test_instance):
     else:
         test_instance.log.info('RHEL AMI found')
         rhui_pkg = 'rh-amazon-rhui-client'
+        unwanted_rhui = 'rh-amazon-rhui-client-ha,rh-amazon-rhui-client-sap'
     cmd = 'sudo rpm -qa|grep rhui'
-    run_cmd(test_instance, cmd, expect_ret=0, expect_kw=rhui_pkg,msg='get rhui pkg version')
+    if unwant_rhui:
+        run_cmd(test_instance, cmd, expect_ret=0, expect_kw=rhui_pkg,expect_not_kw=unwanted_rhui,msg='get rhui pkg version')
+    else:
+        run_cmd(test_instance, cmd, expect_ret=0, expect_kw=rhui_pkg,msg='get rhui pkg version')
 
 def test_stage1_check_root_is_locked(test_instance):
     """
