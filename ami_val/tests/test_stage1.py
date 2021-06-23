@@ -60,6 +60,9 @@ def test_stage1_check_chrony_aws(test_instance):
     rhbz: 1679763 [RFE] AWS AMI - Add Amazon Timesync Service
     '''
     run_cmd(test_instance, "sudo cat /etc/chrony.conf", expect_ret=0, expect_kw='server 169.254.169.123', msg='check chrony points to Amazon Time Sync service')
+    # https://access.redhat.com/solutions/5132071
+    # https://bugzilla.redhat.com/show_bug.cgi?id=1961156
+    run_cmd(test_instance, "sudo cat /etc/chrony.conf", expect_ret=0, expect_kw="#leapsectz right/UTC,#pool 2.rhel.pool.ntp.org iburst", msg='check no NTP leap smear incompatibilitye')
 
 def test_stage1_check_cloud_firstboot(test_instance):
     '''
@@ -132,6 +135,7 @@ def test_stage1_check_cmdline_nouveau(test_instance):
     if 'RHEL-6' in aminame:
         test_instance.skipTest('not required in el6')
     run_cmd(test_instance, "sudo cat /proc/cmdline", expect_ret=0, expect_kw='rd.blacklist=nouveau', msg='check nouveau is in blacklist')
+    run_cmd(test_instance, "sudo cat /etc/modprobe.d/blacklist-nouveau.conf", expect_ret=0, expect_kw='blacklist nouveau', msg='check "blacklist nouveau" in /etc/modprobe.d/blacklist-nouveau.conf')
 
 def test_stage1_check_cmdline_nvme_io_timeout(test_instance):
     '''
