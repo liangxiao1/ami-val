@@ -135,6 +135,7 @@ class EC2VM():
         # Result dir
         with open(cfg_file,'r') as fh:
             keys_data = load(fh, Loader=Loader)
+        self.params = keys_data
         self.tagname = keys_data['tag_name']
 
         self.ssh_key_name = keys_data['pair_name']

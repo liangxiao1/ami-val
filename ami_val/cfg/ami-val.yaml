@@ -1,5 +1,7 @@
 # max boot up time in seconds
-max_boot_time: 40
+max_boot_time: 50
+# max reboot time in seconds after 1st init
+max_reboot_time: 30
 # remote_user: user and keyfile to login instance
 ssh_user: ec2-user
 ssh_keyfile: '/home/virtqe_s1.pem'

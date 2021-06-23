@@ -372,7 +372,7 @@ def run_cmd(test_instance,
 
     try:
         if test_instance.ssh_client is not None:
-            status, output = rmt_ssh.remote_excute(test_instance.ssh_client, cmd, timeout, redirect_stdout=rmt_redirect_stdout, redirect_stderr=rmt_redirect_stderr,rmt_get_pty=rmt_get_pty, log=test_instance.log)
+            status, output = rmt_ssh.remote_excute(test_instance.ssh_client, cmd, timeout, redirect_stdout=rmt_redirect_stderr, redirect_stderr=rmt_redirect_stdout,rmt_get_pty=rmt_get_pty, log=test_instance.log)
         else:
             ret = subprocess.run(cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, timeout=timeout, encoding='utf-8')
             status = ret.returncode
@@ -511,10 +511,10 @@ def getboottime(test_instance):
             break
         time_end = int(time.time())
         run_cmd(test_instance, 'sudo systemctl list-jobs')
-        if time_end - time_start > 60:
-            test_instance.fail("Bootup is not yet finished after 60s")
+        if time_end - time_start > 120:
+            test_instance.fail("Bootup is not yet finished after 120s")
         test_instance.log.info("Wait for bootup finish......")
-        time.sleep(1)
+        time.sleep(2)
     cmd = "sudo systemd-analyze blame > /tmp/blame.log"
     run_cmd(test_instance, cmd, expect_ret=0)
     run_cmd(test_instance, "cat /tmp/blame.log", expect_ret=0)

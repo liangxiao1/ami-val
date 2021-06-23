@@ -11,6 +11,11 @@ import json
 import concurrent.futures
 import signal
 import traceback
+from yaml import load, dump
+try:
+    from yaml import CLoader as Loader, CDumper as Dumper
+except ImportError:
+    from yaml import Loader, Dumper
 
 ALL_TS = []
 
@@ -66,7 +71,7 @@ def main():
                     help='specify logdir, default is /tmp/ami_val if only amis json file specified', required=False)
     parser.add_argument('--clean', dest='is_clean', action='store_true', default=False,
                     help='release resource created in logdir specified', required=False)
-    parser.add_argument('--profile', dest='profile', default='default', action='store',
+    parser.add_argument('--profile', dest='profile', default=None, action='store',
                     help='aws credential profile name, default is default', required=False)
     parser.add_argument('--paralle', dest='is_paralle', action='store_true', default=False,
                     help='run tests in all regions in paralle', required=False)
@@ -107,6 +112,12 @@ def main():
             sys.exit(1)
         for ami in amis_dict:
             ts = resource_class.BaseTest()
+            # Config file
+            cfg_file = os.path.dirname(ami_val.__file__) + "/cfg/ami-val.yaml"
+            # Result dir
+            with open(cfg_file,'r') as fh:
+                keys_data = load(fh, Loader=Loader)
+            ts.params = keys_data
             ts.info = ami
             ts.logdir = logdir
             ts.sumlog = sum_log
@@ -116,6 +127,8 @@ def main():
                 ec2_profile = 'aws-china'
             else:
                 ec2_profile = 'aws'
+            if args.profile:
+                ec2_profile = args.profile
             ts.profile_name = ec2_profile
             ts.resource_file = resource_file
             ALL_TS.append(ts)

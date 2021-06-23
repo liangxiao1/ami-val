@@ -3,7 +3,7 @@ import re
 import sys
 import time
 import json
-from ami_val.libs.utils_lib import run_cmd, get_product_id
+from ami_val.libs.utils_lib import run_cmd, get_product_id, getboottime
 import ami_val
 
 def test_stage2_check_auditd(test_instance):
@@ -122,4 +122,20 @@ def test_stage2_test_reboot_hostname(test_instance):
     test_instance.ssh_client = test_instance.vm.new_ssh_client()
     run_cmd(test_instance, 'last', expect_ret=0, msg='get last history')
     run_cmd(test_instance, 'hostname', expect_ret=0, expect_kw=hostname_1, msg='check hostname after reboot')
+
+def test_stage2_test_rebootime(test_instance):
+    '''
+    rhbz: 1776710, 1446698, 1446688
+    check reboot time after 1st init.
+    can change pass criteria in cfg ami-val.yaml, default is 30s.
+    '''
+
+    test_instance.ssh_client.close()
+    test_instance.vm.reboot()
+    test_instance.ssh_client = test_instance.vm.new_ssh_client()
+    boottime = getboottime(test_instance)
+    if float(boottime) > float(test_instance.params['max_reboot_time']):
+        test_instance.fail('boot time {} over expected {}'.format(boottime, test_instance.params['max_reboot_time']))
+    else:
+        test_instance.log.info('boot time {} within expected {}'.format(boottime, test_instance.params['max_reboot_time']))
         

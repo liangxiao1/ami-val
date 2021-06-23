@@ -6,13 +6,25 @@ import re
 import glob
 import filecmp
 import difflib
-from ami_val.libs.utils_lib import run_cmd, is_arch, get_product_id, is_fedora, is_cmd_exist
+from ami_val.libs.utils_lib import run_cmd, is_arch, get_product_id, is_fedora, is_cmd_exist, getboottime
 
 def test_stage1_check_bash_history(test_instance):
     for user in ['ec2-user', 'root']:
         cmd = 'sudo cat ~{}/.bash_history'.format(user)
         run_cmd(test_instance, cmd, expect_not_ret='0', msg='check bash history does not exist in fresh AMI')
 
+def test_stage1_check_bootime_launch(test_instance):
+    '''
+    check first launch boot time.
+    can change pass criteria in cfg ami-val.yaml, default is 50s.
+    rhbz: 1862930
+    '''
+
+    boottime = getboottime(test_instance)
+    if float(boottime) > float(test_instance.params['max_boot_time']):
+        test_instance.fail('boot time {} over expected {}'.format(boottime, test_instance.params['max_boot_time']))
+    else:
+        test_instance.log.info('boot time {} within expected {}'.format(boottime, test_instance.params['max_boot_time']))
 
 def test_stage1_check_cds_hostnames(test_instance):
     '''
@@ -60,6 +72,14 @@ def test_stage1_check_chrony_aws(test_instance):
     rhbz: 1679763 [RFE] AWS AMI - Add Amazon Timesync Service
     '''
     run_cmd(test_instance, "sudo cat /etc/chrony.conf", expect_ret=0, expect_kw='server 169.254.169.123', msg='check chrony points to Amazon Time Sync service')
+    # https://access.redhat.com/solutions/5132071
+    # https://bugzilla.redhat.com/show_bug.cgi?id=1961156
+    product_id = get_product_id(test_instance)
+    if float(product_id) < float('8.5'):
+        run_cmd(test_instance, "sudo cat /etc/chrony.conf", expect_ret=0, expect_kw="#leapsectz right/UTC,#pool 2.rhel.pool.ntp.org iburst", msg='check no NTP leap smear incompatibilitye')
+    else:
+        run_cmd(test_instance, "sudo cat /etc/chrony.conf", expect_ret=0, expect_not_kw="leapsectz right/UTC,pool 2.rhel.pool.ntp.org iburst", msg='check no NTP leap smear incompatibilitye')
+    run_cmd(test_instance, "sudo journalctl -u chronyd", expect_ret=0, expect_kw='Selected source 169.254.169.123', msg='check Amazon Time Sync service is in use')
 
 def test_stage1_check_cloud_firstboot(test_instance):
     '''
@@ -79,11 +99,20 @@ def test_stage1_check_cmdline_crashkernel(test_instance):
     crashkernel should be enabled in image
     '''
     aminame = test_instance.info['name']
+    product_id = get_product_id(test_instance)
     if 'RHEL-6' in aminame:
         run_cmd(test_instance, "sudo service kdump status")
         run_cmd(test_instance, "sudo cat /proc/cmdline", expect_ret=0, expect_not_kw='crashkernel', msg='crashkernel not required as xen kdump unsupported')
     else:
-        run_cmd(test_instance, "sudo cat /proc/cmdline", expect_ret=0, expect_kw='crashkernel=auto', msg='check crashkernel is enabled')
+        if float(product_id) < float('9'):
+            expect_kw = 'crashkernel=auto'
+        else:
+            # rhbz: 1942398
+            if is_arch(test_instance, arch='x86_64'):
+                expect_kw = 'crashkernel=1G-4G:192M,4G-64G:256M,64G-:512M'
+            else:
+                expect_kw = 'crashkernel=2G-:448M'
+        run_cmd(test_instance, "sudo cat /proc/cmdline", expect_ret=0, expect_kw=expect_kw, msg='check crashkernel is enabled')
 
 def test_stage1_check_cmdline_ifnames(test_instance):
     '''
@@ -132,6 +161,13 @@ def test_stage1_check_cmdline_nouveau(test_instance):
     if 'RHEL-6' in aminame:
         test_instance.skipTest('not required in el6')
     run_cmd(test_instance, "sudo cat /proc/cmdline", expect_ret=0, expect_kw='rd.blacklist=nouveau', msg='check nouveau is in blacklist')
+    product_id = get_product_id(test_instance)
+    if float(product_id) < float('8.5'):
+        file_check = '/etc/modprobe.d/blacklist-nouveau.conf'
+    else:
+        file_check = '/usr/lib/modprobe.d/blacklist-nouveau.conf'
+    expect_kw='blacklist nouveau'
+    run_cmd(test_instance, "sudo cat {}".format(file_check), expect_ret=0, expect_kw=expect_kw, msg='check "{}" in {}'.format(expect_kw, file_check))
 
 def test_stage1_check_cmdline_nvme_io_timeout(test_instance):
     '''
@@ -177,8 +213,14 @@ def test_stage1_check_dracut_conf_sgdisk(test_instance):
     cmd = "rpm -q gdisk"
     run_cmd(test_instance, cmd, expect_ret=0, msg='Check if gdisk is installed')
 
-    cmd = "sudo cat /etc/dracut.conf.d/sgdisk.conf"
-    run_cmd(test_instance, cmd, expect_ret=0, expect_kw='install_items+=" sgdisk "', msg='check if sgdisk is added into amis')
+    product_id = get_product_id(test_instance)
+    if float(product_id) < float('8.5'):
+        file_check = '/etc/dracut.conf.d/sgdisk.conf'
+    else:
+        file_check = '/usr/lib/dracut/dracut.conf.d/sgdisk.conf'
+    expect_kw='install_items+=" sgdisk "'
+    cmd = "sudo cat {}".format(file_check)
+    run_cmd(test_instance, cmd, expect_ret=0, expect_kw=expect_kw, msg='check if "{}" is added into {}'.format(expect_kw,file_check))
 
 def test_stage1_check_dracut_conf_xen(test_instance):
     '''
@@ -187,10 +229,17 @@ def test_stage1_check_dracut_conf_xen(test_instance):
          and not required in arm AMIs
     '''
     cmd = "sudo cat /etc/dracut.conf.d/xen.conf"
-    if is_arch(test_instance, arch='x86_64'):
-        run_cmd(test_instance, cmd, expect_ret=0, expect_kw=' xen-netfront xen-blkfront ', msg='check if xen-netfront and xen-blkfront are added into x86 amis')
+    product_id = get_product_id(test_instance)
+    if float(product_id) < float('8.5'):
+        file_check = '/etc/dracut.conf.d/xen.conf'
     else:
-        run_cmd(test_instance, cmd, expect_not_ret=0, msg='check no /etc/dracut.conf.d/xen.conf in arm amis')
+        file_check = '/usr/lib/dracut/dracut.conf.d/xen.conf'
+    expect_kw=' xen-netfront xen-blkfront '
+    cmd = "sudo cat {}".format(file_check)
+    if is_arch(test_instance, arch='x86_64'):
+        run_cmd(test_instance, cmd, expect_ret=0, expect_kw=expect_kw, msg='check if "{}" are added into x86 amis'.format(expect_kw))
+    else:
+        run_cmd(test_instance, cmd, expect_not_ret=0, msg='check no {} in arm amis'.format(file_check))
 
 def test_stage1_check_ena_set_in_image(test_instance):
     '''
@@ -281,6 +330,9 @@ def test_stage1_check_ks_file_asave(test_instance):
         test_instance.log.info('RHEL AMI found')
         ks_type = 'vanilla'
 
+    product_id = get_product_id(test_instance)
+    if float(product_id) > float('8.4'):
+        test_instance.skipTest('skip it after el8.4')
     ks_file = "{}/debug/{}_{}_{}_{}_ks.cfg".format(test_instance.logdir, test_instance.info["ami"], test_instance.info["region"], test_instance.info["release"]["arch"], ks_type)
     run_cmd(test_instance, 'sudo cp /root/anaconda-ks.cfg /tmp', expect_ret=0, msg='copy /root/anaconda-ks.cfg to /tmp')
     run_cmd(test_instance, 'sudo chmod 666 /tmp/anaconda-ks.cfg', expect_ret=0, msg='change permission')
@@ -306,6 +358,9 @@ def test_stage1_check_ks_file_compare(test_instance):
     else:
         test_instance.log.info('RHEL AMI found')
         ks_type = 'vanilla'
+    product_id = get_product_id(test_instance)
+    if float(product_id) > float('8.4'):
+        test_instance.skipTest('skip it after el8.4')
     src_ks_file = "{}/debug/{}_{}_{}_{}_ks.cfg".format(test_instance.logdir, test_instance.info["ami"], test_instance.info["region"], test_instance.info["release"]["arch"],ks_type)
     ks_match = "{}/debug/*{}_{}_ks.cfg".format(test_instance.logdir, test_instance.info["release"]["arch"], ks_type)
     test_instance.log.info("Try to match: {}".format(ks_match))
@@ -330,7 +385,7 @@ def test_stage1_check_instance_identity(test_instance):
     try to fetch instance identity from EC2 and compare with expectation
     '''
     aminame = test_instance.info['name']
-    cmd = 'curl http://169.254.169.254/latest/dynamic/instance-identity/document'
+    cmd = 'curl -s http://169.254.169.254/latest/dynamic/instance-identity/document'
     output = run_cmd(test_instance, cmd, expect_ret=0, msg='get instance identity data')
     instance = json.loads(output)
     if instance['imageId'] != test_instance.info['ami']:
@@ -358,6 +413,8 @@ def test_stage1_check_instance_identity(test_instance):
     elif 'Access2' in aminame:
         # Cloud Access billing code, means don't charge for the OS (so it can apply to anything cloud Access)
         billingcodes = ['bp-63a5400a']
+    else:
+        test_instance.skipTest('unable to decide billingcodes as no "Hourly2" and "Access2" found in AMI name')
     for billingcode in billingcodes:
         if billingcode not in instance['billingProducts']:
             test_instance.fail("expected({}) not found in instance billingcode({})".format(billingcode, instance['billingProducts']))
@@ -398,7 +455,7 @@ def test_stage1_check_network_ipv6(test_instance):
     '''
     check for networking setup
     '''
-    cmd = "curl http://169.254.169.254/latest/meta-data/network/interfaces/macs"
+    cmd = "curl -s http://169.254.169.254/latest/meta-data/network/interfaces/macs"
     mac = run_cmd(test_instance, cmd, expect_ret=0, msg='get mac address')
     cmd = "{}/{}/ipv6s".format(cmd, mac)
     ipv6s = run_cmd(test_instance, cmd, msg='get ipv6 address')
@@ -428,8 +485,16 @@ def test_stage1_check_nm_cloud_setup(test_instance):
     run_cmd(test_instance, cmd, expect_ret=0, msg='Check if NetworkManager-cloud-setup is installed')
     cmd = "sudo systemctl is-enabled nm-cloud-setup"
     run_cmd(test_instance, cmd, expect_ret=0, msg='Check if nm-cloud-setup is enabled')
-    cmd = "sudo cat /etc/systemd/system/nm-cloud-setup.service.d/10-rh-enable-for-ec2.conf"
-    run_cmd(test_instance, cmd, expect_kw='Environment=NM_CLOUD_SETUP_EC2=yes', msg='Check if NM_CLOUD_SETUP_EC2 is set')
+
+    product_id = get_product_id(test_instance)
+    #COMPOSER-842
+    if float(product_id) < float('8.5'):
+        file_check = '/etc/systemd/system/nm-cloud-setup.service.d/10-rh-enable-for-ec2.conf'
+    else:
+        file_check = '/usr/lib/systemd/system/nm-cloud-setup.service.d/10-rh-enable-for-ec2.conf'
+    expect_kw='Environment=NM_CLOUD_SETUP_EC2=yes'
+    cmd = "sudo cat {}".format(file_check)
+    run_cmd(test_instance, cmd, expect_kw=expect_kw, msg='Check if "{}" is set in {}'.format(expect_kw, file_check))
 
 def test_stage1_check_no_avc_denials(test_instance):
     '''
@@ -491,7 +556,7 @@ libertas-usb8388-firmware,firewalld,biosdevname,plymouth,iprutils'''.split(',')
     if 'SAP' in test_instance.info['name']:
         pkgs_unwanted.remove('alsa-lib')
     if 'HA' in test_instance.info['name']:
-        pkgs_unwanted.remove('rh-amazon-rhui-client')
+        pkgs_unwanted.append('rh-amazon-rhui-client')
     for pkg in pkgs_unwanted:
         cmd = 'rpm -q {}'.format(pkg)
         run_cmd(test_instance, cmd, expect_not_ret=0, msg='check {} not installed'.format(pkg))
@@ -635,10 +700,21 @@ def test_stage1_check_timezone(test_instance):
 def test_stage1_check_udev_kernel(test_instance):
     '''
     des: /etc/udev/rules.d/80-net-name-slot.rules link to /dev/null
+    ks ref:
+    # For cloud images, 'eth0' _is_ the predictable device name, since
+    # we don't want to be tied to specific virtual (!) hardware
+    rm -f /etc/udev/rules.d/70*
+    ln -s /dev/null /etc/udev/rules.d/80-net-name-slot.rules
     '''
-    expect_kws = '/dev/null'
-    cmd = "sudo ls -l /etc/udev/rules.d/80-net-name-slot.rules"
-    run_cmd(test_instance, cmd, expect_ret=0, expect_kw=expect_kws, msg='check /etc/udev/rules.d/80-net-name-slot.rules')
+    product_id = get_product_id(test_instance)
+    if float(product_id) > float('8.4'):
+        #COMPOSER-844 - this set not required in rhel8+
+        cmd = "sudo ls -l /etc/udev/rules.d/80-net-name-slot.rules"
+        run_cmd(test_instance, cmd, expect_not_ret=0, msg='check /etc/udev/rules.d/80-net-name-slot.rules not existing')
+    else:
+        expect_kws = '/dev/null'
+        cmd = "sudo ls -l /etc/udev/rules.d/80-net-name-slot.rules"
+        run_cmd(test_instance, cmd, expect_ret=0, expect_kw=expect_kws, msg='check /etc/udev/rules.d/80-net-name-slot.rules')
     cmd = 'sudo cat /etc/udev/rules.d/70-persistent-net.rules'
     run_cmd(test_instance, cmd, expect_ret=0,msg='check /etc/udev/rules.d/70-persistent-net.rules')
 
