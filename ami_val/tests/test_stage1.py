@@ -273,21 +273,36 @@ def test_stage1_check_firewalld(test_instance):
 
 def test_stage1_check_grub(test_instance):
     '''
-    Check grub config:
+    Check grub config for el5,el6:
     - /boot/grub/menu.lst exists
     - /boot/grub/menu.lst is symlink for /boot/grub/grub.conf
     - hard drive is not (hd0,0) for paravirtual
+    Check grub2 config for el8,el8+:
+    - boot with efi or legacy bios
+    - /boot/grub2/grubenv is symlink for /boot/efi/EFI/redhat/grubenv if boot with efi
+    - /boot/grub2/grubenv is a file rather than a link if boot with legacy bios
     '''
-    aminame = test_instance.info['name']
-    if not aminame.startswith(('RHEL-6')):
-        test_instance.skipTest('only run in el5, el6')
-    cmd = 'sudo readlink -e /boot/grub/menu.lst'
-    run_cmd(test_instance, cmd, expect_ret=0, expect_kw="/boot/grub/grub.conf", 
-        msg='check /boot/grub/menu.lst is symlink for /boot/grub/grub.conf')
-    cmd = 'sudo cat /boot/grub/grub.conf'
-    out = run_cmd(test_instance, cmd, expect_ret=0, msg='get grub.conf')
-    if r"hd0,0" not in out:
-        test_instance.fail("'hd0,0' not found in grub.conf")
+    product_id = get_product_id(test_instance)
+    if float(product_id) < float('7'):
+        cmd = 'sudo readlink -e /boot/grub/menu.lst'
+        run_cmd(test_instance, cmd, expect_ret=0, expect_kw="/boot/grub/grub.conf",
+            msg='check /boot/grub/menu.lst is symlink for /boot/grub/grub.conf')
+        cmd = 'sudo cat /boot/grub/grub.conf'
+        out = run_cmd(test_instance, cmd, expect_ret=0, msg='get grub.conf')
+        if r"hd0,0" not in out:
+            test_instance.fail("'hd0,0' not found in grub.conf")
+    elif float(product_id) > float('7.9'):
+        cmd = 'sudo ls /sys/firmware/efi'
+        out = run_cmd(test_instance, cmd, msg='check if boot with efi')
+        cmd = 'sudo readlink -e /boot/grub2/grubenv'
+        if 'No such file or directory' not in out:
+            run_cmd(test_instance, cmd, expect_ret=0, expect_kw="/boot/efi/EFI/redhat/grubenv",
+                msg='check /boot/grub2/grubenv is symlink for /boot/efi/EFI/redhat/grubenv')
+        else:
+            run_cmd(test_instance, cmd, expect_ret=0, expect_kw="/boot/grub2/grubenv",
+                msg='check /boot/grub2/grubenv is a file rather than a link')
+    else:
+        test_instance.skipTest('only run in el5, el6, el8, el8+')
 
 def test_stage1_check_hosts(test_instance):
     '''
