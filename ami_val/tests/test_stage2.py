@@ -111,6 +111,18 @@ def test_stage2_check_ttyS0_conf(test_instance):
     run_cmd(test_instance, 'sudo cat /etc/init/ttyS0.conf', expect_not_ret=0, msg='make sure no /etc/init/ttyS0.conf found')
     run_cmd(test_instance, 'sudo cat /etc/init/ttyS0.bak', msg='ttyS0.bak may also not in RHEL nowadays')
 
+def test_stage2_test_reboot_grubby(test_instance):
+    '''
+    check user can update boot parameter using grubby tool
+    '''
+
+    run_cmd(test_instance, 'sudo grubby --update-kernel=ALL --args="kmemleak=on"', msg='append boot parameter')
+    test_instance.ssh_client.close()
+    test_instance.vm.reboot()
+    test_instance.ssh_client = test_instance.vm.new_ssh_client()
+    run_cmd(test_instance, 'sudo cat /proc/cmdline', expect_kw="kmemleak=on", msg='check if the parameter has been added')
+    run_cmd(test_instance, 'sudo grubby --update-kernel=ALL --remove-args="kmemleak=on"', msg='remove the appended boot parameter')
+
 def test_stage2_test_reboot_hostname(test_instance):
     '''
     check that reboot doesn't change the hostname
