@@ -13,6 +13,7 @@ import urllib.request as request
 import time
 import importlib
 import copy
+import ssl
 from yaml import load, dump
 try:
     from yaml import CLoader as Loader, CDumper as Dumper
@@ -220,8 +221,9 @@ def prepare_dir(args):
         task_url = args.amis_file.replace('push','task')
         task_url = task_url.replace('https','http')
         json_url = task_url + "/log/images.json?format=raw"
+        context = ssl._create_unverified_context()
         print('Get data from %s' % json_url)
-        s = request.urlopen(json_url)
+        s = request.urlopen(json_url,context=context)
         print('Got data from %s' % s.geturl())
         task_id = task_url.rstrip('/').split('/')[-1]
         logdir = "{}_{}".format(logdir, task_id)
