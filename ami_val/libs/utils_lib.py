@@ -523,8 +523,11 @@ def getboottime(test_instance):
     output = run_cmd(test_instance, "sudo systemd-analyze", expect_ret=0)
     boot_time = re.findall("=.*s", output)[0]
     boot_time = boot_time.strip("=\n")
-    boot_time_sec = re.findall('[0-9.]+s', boot_time)[0]
-    boot_time_sec = boot_time_sec.strip('= s')
+    boot_time_sec = re.findall('[0-9.]+s', boot_time)
+    if len(boot_time_sec) == 0:
+        boot_time_sec = 0
+    else:
+        boot_time_sec = boot_time_sec[0].strip('= s')
     if 'min' in boot_time:
         boot_time_min = re.findall('[0-9]+min', boot_time)[0]
         boot_time_min = boot_time_min.strip('min')
