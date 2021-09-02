@@ -3,7 +3,7 @@ import os
 
 setuptools.setup(
     name="ami-val",
-    version="0.0.9",
+    version="0.0.10",
     author="Xiao Liang",
     author_email="xiliang@redhat.com",
     description="AMI validation tool",
