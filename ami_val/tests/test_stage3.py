@@ -6,6 +6,12 @@ from ami_val.libs.utils_lib import run_cmd, get_product_id, is_fedora
 import ami_val
 import re
 
+def test_stage3_check_rpm_V_unsatisfied_dependencies(test_instance):
+    '''
+    check unsatisfied dependencies of pkg.
+    '''
+    run_cmd(test_instance, "sudo rpm -Va", expect_not_kw='Unsatisfied', timeout=180, msg='check unsatisfied dependencies of pkg')
+
 def test_stage3_check_selinux(test_instance):
     '''
     SELinux should be in enforcing/targeted mode
