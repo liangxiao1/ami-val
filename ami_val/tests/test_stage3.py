@@ -19,7 +19,7 @@ def test_stage3_check_selinux(test_instance):
     out = run_cmd(test_instance, 'uname -r', msg='get kernel version')
     if 'SAP' in test_instance.info['name']:
         test_instance.log.info('SAP AMIs found')
-        run_cmd(test_instance, 'sudo getenforce',expect_kw='Permissive', msg='check selinux current mode is Permissive')
+        run_cmd(test_instance, 'sudo getenforce',expect_kw='Permissive', msg='check selinux current mode is Permissive(rhbz1960628)')
         run_cmd(test_instance, 'sudo cat /etc/sysconfig/selinux',expect_kw='SELINUX=permissive,SELINUXTYPE=targeted', msg='check selinux current setting')
         if 'el7' not in out and 'el6' not in out:
             # el7 and el6 do not have setenforce installed by default, do not try to change its setting
