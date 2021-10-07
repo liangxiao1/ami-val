@@ -225,19 +225,22 @@ def test_stage1_check_dracut_conf_sgdisk(test_instance):
 def test_stage1_check_dracut_conf_xen(test_instance):
     '''
     rhbz: 1849082
-    des: add ' xen-netfront xen-blkfront ' to '/etc/dracut.conf.d/xen.conf' in x86 AMIs
-         and not required in arm AMIs
+    des: add ' xen-netfront xen-blkfront ' to '/etc/dracut.conf.d/xen.conf' in x86 AMIs prior RHEL-8.4.
+         using image builder from RHEL-8.5, updated to add ' nvme xen-blkfront ' to '/usr/lib/dracut/dracut.conf.d/ec2.conf'.
+         This is not required in arm AMIs.
     '''
     cmd = "sudo cat /etc/dracut.conf.d/xen.conf"
     product_id = get_product_id(test_instance)
     if float(product_id) < float('8.5'):
         file_check = '/etc/dracut.conf.d/xen.conf'
+        expect_kw=' xen-netfront xen-blkfront '
     else:
-        file_check = '/usr/lib/dracut/dracut.conf.d/xen.conf'
-    expect_kw=' xen-netfront xen-blkfront '
+        #COMPOSER-1096
+        file_check = '/usr/lib/dracut/dracut.conf.d/ec2.conf'
+        expect_kw=' nvme xen-blkfront '
     cmd = "sudo cat {}".format(file_check)
     if is_arch(test_instance, arch='x86_64'):
-        run_cmd(test_instance, cmd, expect_ret=0, expect_kw=expect_kw, msg='check if "{}" are added into x86 amis'.format(expect_kw))
+        run_cmd(test_instance, cmd, expect_ret=0, expect_kw=expect_kw, msg='check if "{}" exists in x86 amis'.format(expect_kw))
     else:
         run_cmd(test_instance, cmd, expect_not_ret=0, msg='check no {} in arm amis'.format(file_check))
 
