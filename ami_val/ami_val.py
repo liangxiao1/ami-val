@@ -164,6 +164,17 @@ def main():
             ts.casename = case
             ts.debuglog = "{}/debug/{}_{}.log".format(logdir, ts.info["ami"], case)
             ts.log.logfile = ts.debuglog
+            ts.log.info("-"*80)
+            ts.log.info("Code Repo: {}".format(ts.params['code_repo']))
+            ts.log.info("Case ID: {}".format(ts.casename))
+            ts.log.info("Case Doc: {}".format(eval(ts.casename).__doc__))
+            ts.log.info("Case Params:")
+            for key in ts.params.keys():
+                if 'password' in key:
+                    ts.log.info("key:{}, val:*******".format(key))
+                else:
+                    ts.log.info("key:{}, val:{}".format(key, ts.params[key]))
+            ts.log.info("-"*80)
 
         # run test in paralle or sequence
         if args.is_paralle:
