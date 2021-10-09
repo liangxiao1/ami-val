@@ -3,6 +3,9 @@ from ami_val.libs import utils_lib, resource_class, aws_lib
 import re
 
 def test_stage0_check_aminame(test_instance):
+    '''
+    check there is 'RHEL' in RHEL AMIs
+    '''
     test_instance.log.info("Details:{}".format(json.dumps(test_instance.info, indent=4)))
     aminame = test_instance.info['name']
     if 'RHEL' in aminame:
@@ -23,6 +26,9 @@ def test_stage0_check_aminame(test_instance):
         test_instance.fail('RHEL is expected in AMI name but get {} in push task'.format(aminame))
 
 def test_stage0_check_ena_set_in_push(test_instance):
+    '''
+    check if ena is enabled in RHEL-7.4+.
+    '''
     test_instance.log.info("Details:{}".format(json.dumps(test_instance.info, indent=4)))
     aminame = test_instance.info['name']
     if aminame.startswith(('RHEL-6','RHEL-7.0','RHEL-7.1','RHEL-7.2','RHEL-7.3')):
