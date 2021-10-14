@@ -280,9 +280,13 @@ def test_stage1_check_grub(test_instance):
     - /boot/grub/menu.lst exists
     - /boot/grub/menu.lst is symlink for /boot/grub/grub.conf
     - hard drive is not (hd0,0) for paravirtual
-    Check grub2 config for el8,el8+:
+    Check grub2 config for el8:
     - boot with efi or legacy bios
-    - /boot/grub2/grubenv is symlink for /boot/efi/EFI/redhat/grubenv if boot with efi
+    - /boot/grub2/grubenv is a symlink for /boot/efi/EFI/redhat/grubenv if boot with efi
+    - /boot/grub2/grubenv is a file rather than a link if boot with legacy bios
+    Check grub2 config for el9:
+    - boot with efi or legacy bios
+    - /boot/grub2/grub.cfg exists and /boot/grub2/grubenv is a file if boot with efi
     - /boot/grub2/grubenv is a file rather than a link if boot with legacy bios
     '''
     product_id = get_product_id(test_instance)
@@ -298,9 +302,15 @@ def test_stage1_check_grub(test_instance):
         cmd = 'sudo ls /sys/firmware/efi'
         out = run_cmd(test_instance, cmd, msg='check if boot with efi')
         cmd = 'sudo readlink -e /boot/grub2/grubenv'
-        if 'No such file or directory' not in out:
-            run_cmd(test_instance, cmd, expect_ret=0, expect_kw="/boot/efi/EFI/redhat/grubenv",
-                msg='check /boot/grub2/grubenv is symlink for /boot/efi/EFI/redhat/grubenv')
+        if out:
+            if float(product_id) < float('9'):
+                run_cmd(test_instance, cmd, expect_ret=0, expect_kw="/boot/efi/EFI/redhat/grubenv",
+                        msg='check /boot/grub2/grubenv is symlink for /boot/efi/EFI/redhat/grubenv')
+            else:
+                run_cmd(test_instance, cmd, expect_ret=0, expect_kw="/boot/grub2/grubenv",
+                        msg='check /boot/grub2/grubenv is a file rather than a link')
+                run_cmd(test_instance, 'sudo ls /boot/grub2', expect_ret=0, expect_kw="grub.cfg",
+                        msg='check for grub.cfg')
         else:
             run_cmd(test_instance, cmd, expect_ret=0, expect_kw="/boot/grub2/grubenv",
                 msg='check /boot/grub2/grubenv is a file rather than a link')
@@ -314,6 +324,16 @@ def test_stage1_check_hosts(test_instance):
     expect_kws = '127.0.0.1   localhost localhost.localdomain localhost4 localhost4.localdomain4,::1         localhost localhost.localdomain localhost6 localhost6.localdomain6'
     cmd = "sudo cat /etc/hosts"
     run_cmd(test_instance, cmd, expect_ret=0, expect_kw=expect_kws, msg='check /etc/hosts')
+
+def test_stage1_check_hostkey_permissions(test_instance):
+    '''
+    bz:2013644
+    check ssh files permission set are correct.
+    '''
+    run_cmd(test_instance,
+            "ls -l /etc/ssh/{ssh_host_ecdsa_key,ssh_host_ed25519_key,ssh_host_rsa_key}",
+            expect_not_kw='-rw-------. 1 root root',
+            msg='check ssh files permission set are correct')
 
 def test_stage1_check_inittab(test_instance):
     '''
