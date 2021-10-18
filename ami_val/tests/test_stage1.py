@@ -227,11 +227,14 @@ def test_stage1_check_dracut_conf_xen(test_instance):
     rhbz: 1849082
     des: add ' xen-netfront xen-blkfront ' to '/etc/dracut.conf.d/xen.conf' in x86 AMIs prior RHEL-8.4.
          using image builder from RHEL-8.5, updated to add ' nvme xen-blkfront ' to '/usr/lib/dracut/dracut.conf.d/ec2.conf'.
-         This is not required in arm AMIs.
+         This is not required in arm AMIs and RHEL-7.
     '''
     cmd = "sudo cat /etc/dracut.conf.d/xen.conf"
     product_id = get_product_id(test_instance)
-    if float(product_id) < float('8.5'):
+    if float(product_id) < float('8'):
+        file_check = '/etc/dracut.conf.d/xen.conf'
+        test_instance.skipTest('{} is not required in el7'.format(file_check))
+    elif float(product_id) < float('8.5'):
         file_check = '/etc/dracut.conf.d/xen.conf'
         expect_kw=' xen-netfront xen-blkfront '
     else:
@@ -630,6 +633,10 @@ gdisk,insights-client,dracut-config-generic,dracut-config-rescue,grub2-tools'''.
         pkgs_wanted.extend(['numactl', 'PackageKit-gtk3-module', 'xorg-x11-xauth', 'libnsl'])
         #BZ:1959962
         pkgs_wanted.append('tuned-profiles-sap-hana')
+    if float(product_id) < float('8'):
+        #For RHEL-7
+        pkgs_wanted = '''kernel,yum-utils,cloud-init,dracut-config-generic,dracut-norescue,grub2,tar,rsync,chrony'''.split(',')
+        pkgs_wanted = [ x.strip('\n') for x in pkgs_wanted ]
     for pkg in pkgs_wanted:
         cmd = 'rpm -q {}'.format(pkg)
         run_cmd(test_instance, cmd, expect_ret=0, msg='check {} installed'.format(pkg))

@@ -20,7 +20,7 @@ except ImportError:
 ALL_TS = []
 
 def sig_handler(signum, frame):
-    print('Got signal {}, call cleanup and exit!'.format(signum))
+    print('Got signal {}, call cleanup and exit! Waiting......'.format(signum))
     cleanup_paralle(ALL_TS)
     sys.exit(0)
 
