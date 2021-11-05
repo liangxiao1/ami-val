@@ -73,24 +73,46 @@ def test_stage2_check_sap_security_limits(test_instance):
 @sapsys    soft    nproc    unlimited,\
 @dba       hard    nproc    unlimited,\
 @dba       soft    nproc    unlimited'
+    expected_cfg1 = '@sapsys hard nofile 65536,\
+@sapsys soft nofile 65536,\
+@dba hard nofile 65536,\
+@dba soft nofile 65536,\
+@sapsys hard nproc unlimited,\
+@sapsys soft nproc unlimited,\
+@dba hard nproc unlimited,\
+@dba soft nproc unlimited'
     cmd = 'sudo cat /etc/security/limits.d/99-sap.conf'
-    run_cmd(test_instance, cmd, expect_kw=expected_cfg, msg='check /etc/security/limits.d/99-sap.conf')
+    result = run_cmd(test_instance, cmd, msg='check /etc/security/limits.d/99-sap.conf')
+    if result[0:25] == '@sapsys hard nofile 65536':
+        run_cmd(test_instance, cmd, expect_kw=expected_cfg1, msg='check /etc/security/limits.d/99-sap.conf')
+    else:
+        run_cmd(test_instance, cmd, expect_kw=expected_cfg, msg='check /etc/security/limits.d/99-sap.conf')
 
 def test_stage2_check_sap_sysctl(test_instance):
     #bz: 1959962
     if 'SAP' not in test_instance.info['name']:
         test_instance.skipTest('only run in SAP AMIs')
     expected_cfg = 'kernel.pid_max = 4194304,vm.max_map_count = 2147483647'
-    cmd = 'sudo cat /etc/sysctl.d/sap.conf'
-    run_cmd(test_instance, cmd, expect_kw=expected_cfg, msg='check /etc/sysctl.d/sap.conf')
+    result = run_cmd(test_instance, 'sudo find /etc/sysctl.d/sap.conf', msg='find /etc/sysctl.d/sap.conf')
+    if result != ' ':
+        run_cmd(test_instance, 'sudo cat /usr/lib/sysctl.d/sap.conf', expect_kw=expected_cfg,
+                msg='check /usr/lib/sysctl.d/sap.conf')
+    else:
+        run_cmd(test_instance, 'sudo cat /etc/sysctl.d/sap.conf', expect_kw=expected_cfg,
+                msg='check /etc/sysctl.d/sap.conf')
 
 def test_stage2_check_sap_tmpfiles(test_instance):
     #bz: 1959979
     if 'SAP' not in test_instance.info['name']:
         test_instance.skipTest('only run in SAP AMIs')
     expected_cfg =  'x /tmp/.sap*,x /tmp/.hdb*lock,x /tmp/.trex*lock'
-    cmd = 'sudo cat /etc/tmpfiles.d/sap.conf'
-    run_cmd(test_instance, cmd, expect_kw=expected_cfg, msg='check /etc/tmpfiles.d/sap.conf')
+    result = run_cmd(test_instance, 'sudo find /etc/tmpfiles.d/sap.conf', msg='find /etc/tmpfiles.d/sap.conf')
+    if result != ' ':
+        run_cmd(test_instance, 'sudo cat /usr/lib/tmpfiles.d/sap.conf', expect_kw=expected_cfg,
+                         msg='check /usr/lib/tmpfiles.d/sap.conf')
+    else:
+        run_cmd(test_instance, 'sudo cat /etc/tmpfiles.d/sap.conf', expect_kw=expected_cfg,
+                msg='check /etc/tmpfiles.d/sap.conf')
 
 def test_stage2_check_sap_tuned(test_instance):
     #bz: 1959962
