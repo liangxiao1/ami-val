@@ -476,9 +476,9 @@ def test_stage1_check_network_driver(test_instance):
     if it is not a xen instance, ena should be used.
     '''
     if is_fedora(test_instance):
-        is_cmd_exist(test_instance, 'lspci')
+        is_cmd_exist(test_instance, 'lshw')
         is_cmd_exist(test_instance, 'ethtool')
-    cmd = 'sudo lspci'
+    cmd = 'sudo lshw -C network'
     pci_out = run_cmd(test_instance, cmd, expect_ret=0, msg='get pci devices')
     ethtool_cmd = 'sudo ethtool -i eth0'
     if 'ENA' in pci_out:
@@ -487,7 +487,7 @@ def test_stage1_check_network_driver(test_instance):
         run_cmd(test_instance, ethtool_cmd, expect_ret=0, expect_kw='ixgbevf', msg='check if eth0 is using ixgbevf driver')
     else:
         run_cmd(test_instance, ethtool_cmd, expect_ret=0, expect_kw='vif', msg='check if eth0 is using vif driver')
-    cmd = 'sudo lscpu'
+    cmd = 'lscpu'
     cpu_out = run_cmd(test_instance, cmd, expect_ret=0, msg='get cpu info')
     if 'Xen' not in cpu_out:
         run_cmd(test_instance, ethtool_cmd, expect_ret=0, expect_kw='ena', msg='ena must used in KVM, aarch64 and metal instances')
@@ -598,9 +598,14 @@ libertas-usb8388-firmware,firewalld,biosdevname,plymouth,iprutils'''.split(',')
         pkgs_unwanted.remove('alsa-lib')
     if 'HA' in test_instance.info['name']:
         pkgs_unwanted.append('rh-amazon-rhui-client')
+    pkg_unexpected = []
     for pkg in pkgs_unwanted:
         cmd = 'rpm -q {}'.format(pkg)
-        run_cmd(test_instance, cmd, expect_not_ret=0, msg='check {} not installed'.format(pkg))
+        ret = run_cmd(test_instance, cmd, expect_not_ret=0, msg='check {} not installed'.format(pkg), ret_status=True)
+        if ret == 0:
+            pkg_unexpected.append(pkg)
+    if pkg_unexpected:
+        test_instance.fail('found unexpected pkgs: {}'.format(pkg_unexpected))
 
 def test_stage1_check_pkg_wanted(test_instance):
     '''
@@ -635,11 +640,16 @@ gdisk,insights-client,dracut-config-generic,dracut-config-rescue,grub2-tools'''.
         pkgs_wanted.append('tuned-profiles-sap-hana')
     if float(product_id) < float('8'):
         #For RHEL-7
-        pkgs_wanted = '''kernel,yum-utils,cloud-init,dracut-config-generic,dracut-norescue,grub2,tar,rsync,chrony'''.split(',')
+        pkgs_wanted = '''kernel,yum-utils,cloud-init,dracut-config-generic,dracut-config-rescue,grub2,tar,rsync,chrony'''.split(',')
         pkgs_wanted = [ x.strip('\n') for x in pkgs_wanted ]
+    missing_pkgs = []
     for pkg in pkgs_wanted:
         cmd = 'rpm -q {}'.format(pkg)
-        run_cmd(test_instance, cmd, expect_ret=0, msg='check {} installed'.format(pkg))
+        ret = run_cmd(test_instance, cmd, msg='check {} installed'.format(pkg), ret_status=True)
+        if ret != 0:
+            missing_pkgs.append(pkg)
+    if missing_pkgs:
+        test_instance.fail('missing {}'.format(missing_pkgs))
 
 def test_stage1_check_product_id(test_instance):
     '''
