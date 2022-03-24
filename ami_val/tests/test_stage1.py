@@ -305,7 +305,7 @@ def test_stage1_check_grub(test_instance):
         cmd = 'sudo ls /sys/firmware/efi'
         out = run_cmd(test_instance, cmd, msg='check if boot with efi')
         cmd = 'sudo readlink -e /boot/grub2/grubenv'
-        if out:
+        if out and 'No such file' not in out:
             if float(product_id) < float('9'):
                 run_cmd(test_instance, cmd, expect_ret=0, expect_kw="/boot/efi/EFI/redhat/grubenv",
                         msg='check /boot/grub2/grubenv is symlink for /boot/efi/EFI/redhat/grubenv')

@@ -1,9 +1,10 @@
 import setuptools
 import os
+import ami_val
 
 setuptools.setup(
     name="ami-val",
-    version="0.0.12",
+    version=ami_val.__version__,
     author="Xiao Liang",
     author_email="xiliang@redhat.com",
     description="AMI validation tool",

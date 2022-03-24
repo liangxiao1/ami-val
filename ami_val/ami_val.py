@@ -149,7 +149,6 @@ def main():
                             if ts.vm is not None:
                                 ts.vm.delete(wait=False)
         sys.exit(0)
-    #aws_lib.aws_check_all_regions(profile=ec2_profile, is_paralle=args.is_paralle, resource_file=resource_file)
     region_missed, region_uploaded = aws_lib.aws_find_region_missed(profile=ec2_profile, resource_file=resource_file)
     if not os.path.exists(sum_log):
         with open(sum_log, 'w+') as fh:
@@ -166,6 +165,7 @@ def main():
             ts.log.logfile = ts.debuglog
             ts.log.info("-"*80)
             ts.log.info("Code Repo: {}".format(ts.params['code_repo']))
+            ts.log.info("Code Version: {}".format(ami_val.__version__))
             ts.log.info("Case ID: {}".format(ts.casename))
             ts.log.info("Case Doc: {}".format(eval(ts.casename).__doc__))
             ts.log.info("Case Params:")

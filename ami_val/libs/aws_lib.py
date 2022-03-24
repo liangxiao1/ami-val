@@ -110,7 +110,7 @@ def aws_vpc_create(region, profile_name, tag, log=None):
     try:
         vpc = ec2.Vpc(vpcid)
         log.info("vpc init {}".format(vpcid))
-        tag = vpc.create_tags(
+        vpc.create_tags(
             DryRun=False,
             Tags=[
                 {
@@ -129,16 +129,16 @@ def aws_vpc_create(region, profile_name, tag, log=None):
     except Exception as error:
         log.info(str(error))
         return False
-    igw = aws_igw_create(client, vpcid, tag)
+    igw = aws_igw_create(region, profile_name, vpcid, tag, log=log)
     if igw == None:
         return vpc
-    rt = aws_rt_update(client, vpc, igw, tag)
+    rt = aws_rt_update(region, profile_name, vpcid, igw.id, tag, log=log)
     if rt == None:
         return vpc
-    subnet = aws_subnet_create(client, vpc, tag)
+    subnet = aws_subnet_create(region, profile_name, vpcid, tag, log=log)
     if subnet == None:
         return vpc
-    sg = aws_sg_update(client, vpc, igw, tag)
+    sg = aws_sg_update(region, profile_name, vpcid,tag, log=log)
     if sg == None:
         return vpc
 
@@ -162,7 +162,7 @@ def aws_subnet_find(region, profile, create_new=True, log=None):
                 break
     if subnet_id is None and create_new:
         log.info("No ipv4 pub enabed subnets found in region {}".format(region))
-        vpc = aws_vpc_create(region, profile, 'virtqe')
+        vpc = aws_vpc_create(region, profile, 'virtqe', log=log)
         subnets = client.describe_subnets()['Subnets']
         for subnet in subnets:
             if subnet['MapPublicIpOnLaunch']:
@@ -188,20 +188,23 @@ def aws_igw_create(region, profile, vpcid, tag, log=None):
         tag = default_tag
     try:
         igw_new = client.create_internet_gateway(
+            TagSpecifications=[
+                {
+                    'ResourceType': 'internet-gateway',
+                    'Tags': [
+                        {
+                            'Key': 'Name',
+                            'Value': tag
+                        },
+                    ]
+                },
+            ],
             DryRun=False
+            
         )
         igwid = igw_new['InternetGateway']['InternetGatewayId']
         log.info("New igw created {}".format(igwid))
         igw = ec2.InternetGateway(igwid)
-        igw.create_tags(
-            DryRun=False,
-            Tags=[
-                {
-                    'Key': 'Name',
-                    'Value': tag
-                },
-            ]
-        )
         igw.attach_to_vpc(
             DryRun=False,
             VpcId=vpcid
@@ -248,10 +251,11 @@ def aws_rt_update(region, profile, vpcid, igwid, tag, log=None):
             ]
         )
         log.info("tag added")
+        log.info("create route to {}".format(igwid))
         route = rt.create_route(
             DestinationCidrBlock='0.0.0.0/0',
             DryRun=False,
-            GatewayId=igw.id,
+            GatewayId=igwid,
         )
         return rt
     except Exception as err:
@@ -511,7 +515,7 @@ def aws_check_all_regions(profile=None, is_paralle=True, log=None, resource_file
     
     else:
         for region in region_list:
-            subnet_id, sg_id, region_name = aws_subnet_find(region=region['RegionName'], profile=profile, create_new=False)
+            subnet_id, sg_id, region_name = aws_subnet_find(region=region['RegionName'], profile=profile, create_new=True)
             #log.info('{} {} {}'.format(subnet_id, sg_id, region_name))
             utils_lib.save_resource(resource_file, region=region_name, subnet=subnet_id, sg=sg_id)
             _, instance_type_arm = aws_instance_type_find(region=region['RegionName'], profile=profile, arch='arm64')
@@ -537,7 +541,7 @@ def aws_check_region(region=None, profile=None, log=None, resource_file=None):
     log.info("Checking keypair exists in {}......".format(region))
     aws_import_key(region=region, profile=profile, keyname=keyname, pubkeyfile=pubkeyfile, log=log)
     log.info("Searching proper subnet and security group in {}......".format(region))
-    subnet_id, sg_id, region_name = aws_subnet_find(region=region, profile=profile, create_new=False, log=log)
+    subnet_id, sg_id, region_name = aws_subnet_find(region=region, profile=profile, create_new=True, log=log)
     #log.info('{} {} {}'.format(subnet_id, sg_id, region_name))
     utils_lib.save_resource(resource_file, region=region, subnet=subnet_id, sg=sg_id, log=log)
     _, instance_type_arm = aws_instance_type_find(region=region, profile=profile, arch='arm64', log=log)
