@@ -42,6 +42,14 @@ def test_stage0_check_ena_set_in_push(test_instance):
         else:
             test_instance.log.info('ena_support is enabled as expected in push task after RHEL-7.4, acutal: {}'.format(test_instance.info['ena_support']))
 
+def test_stage0_check_ena_set_in_cloud(test_instance):
+    '''
+    check if ena is actually enabled in cloud
+    '''
+    image = resource_class.EC2Image(test_instance)
+    if not image.is_ena_enabled():
+        test_instance.fail('ena not enabled')
+
 def test_stage0_launch_instance(test_instance):
     '''
     launch instances from AMIs in all supported regions

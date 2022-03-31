@@ -602,3 +602,39 @@ class EC2VM():
         except Exception as err:
             self.log.info('Cannot get image ena_support status.{}'.format(err))
             return False
+
+class EC2Image():
+    __ec2_instance = None
+
+    def __init__(self, testinstance):
+        self.log = testinstance.log
+        config = Config(retries=dict(max_attempts=2, ))
+        self.profile_name = testinstance.profile_name
+        if self.profile_name is None:
+            self.profile_name = 'default'
+        self.log.info('Load profile_name: {}'.format(self.profile_name))
+        self.session = boto3.session.Session(profile_name=self.profile_name, region_name=testinstance.info.get('region'))
+        self.__resource = self.session.resource('ec2', config=config)
+        self.__client = self.session.client('ec2', config=config, region_name=testinstance.info.get('region'))
+        self.image_data = self.__client.describe_images(ImageIds=[
+            testinstance.info['ami'],
+        ])
+        #self.image = self.__resource.Image(testinstance.info['ami'])
+        
+    def is_ena_enabled(self):
+        self.log.info(self.image_data)
+        if not self.image_data.get('Images'):
+            self.log.info('not found ami')
+            return False
+        for image in self.image_data.get('Images'):
+            if 'EnaSupport' in image.keys():
+                if image.get('EnaSupport'):
+                    self.log.info('ena enabled as expected')
+                    return True
+                else:
+                    self.log.info('ena not enabled')
+                    return False
+            else:
+                self.log.info('ena not enabled')
+                return False
+        return False
