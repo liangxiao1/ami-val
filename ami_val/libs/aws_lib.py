@@ -69,12 +69,12 @@ def aws_vpc_sg_find(vpcid, region, profile_name, log=None):
         log.info("default sg get error: {}".format(str(error)))
         return None
     for sg in sgs:
+        log.info("checking security group: {}".format(sg))
+        log.info("ip permissions: {}".format(sg.ip_permissions))
         try:
-            sg = ec2.SecurityGroup(sg.id)
             ips = sg.ip_permissions
             for ip in ips:
                 ip_ranges = ip['IpRanges']
-                log.debug(ip_ranges)
                 for ip_range in ip_ranges:
                     if '0.0.0.0/0' in ip_range['CidrIp']:
                         log.info("found security group:{} vpc check pass!".format(sg.id))
@@ -154,6 +154,7 @@ def aws_subnet_find(region, profile, create_new=True, log=None):
     sg_id = None
     subnets = client.describe_subnets()['Subnets']
     for subnet in subnets:
+        log.info("checking subnet: {}".format(subnet))
         if subnet['MapPublicIpOnLaunch']:
             vpc_id = subnet['VpcId']
             sg_id = aws_vpc_sg_find(vpc_id, region, profile, log=log)
@@ -161,7 +162,7 @@ def aws_subnet_find(region, profile, create_new=True, log=None):
                 subnet_id = subnet['SubnetId']
                 break
     if subnet_id is None and create_new:
-        log.info("No ipv4 pub enabed subnets found in region {}".format(region))
+        log.info("No ipv4 pub enabled subnets found in region {}".format(region))
         vpc = aws_vpc_create(region, profile, 'virtqe', log=log)
         subnets = client.describe_subnets()['Subnets']
         for subnet in subnets:
