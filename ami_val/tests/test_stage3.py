@@ -72,15 +72,16 @@ def test_stage3_test_yum_group_install(test_instance):
 
 def test_stage3_test_subscription_manager_auto(test_instance):
     '''
-    bz: 1932802, 1905398
+    rhbz 8.4: 1932802, 1905398
+    rhbz 7.9: 2077086, 2077085
     '''
     if 'ATOMIC' in test_instance.info['name'].upper():
         test_instance.skipTest('skip in Atomic AMIs')
     if is_fedora(test_instance):
         test_instance.skipTest('skip run in Fedora AMIs')
     product_id = get_product_id(test_instance)
-    if float(product_id) < float('8.4'):
-        test_instance.skipTest('skip in earlier than el8.4')
+    if float(product_id) < float('7.9'):
+        test_instance.skipTest('skip in earlier than el7.9')
 
     cmd = "sudo subscription-manager config"
     run_cmd(test_instance, cmd, expect_ret=0, expect_kw="auto_registration = 1,manage_repos = 0", msg='try to check subscription-manager config')

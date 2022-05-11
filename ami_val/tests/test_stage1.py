@@ -70,12 +70,14 @@ def test_stage1_check_cloudinit_cfg_no_wheel(test_instance):
 def test_stage1_check_chrony_aws(test_instance):
     '''
     rhbz: 1679763 [RFE] AWS AMI - Add Amazon Timesync Service
+    # https://access.redhat.com/solutions/5132071
+    # https://bugzilla.redhat.com/show_bug.cgi?id=1961156
     '''
     run_cmd(test_instance, "sudo cat /etc/chrony.conf", expect_ret=0, expect_kw='server 169.254.169.123', msg='check chrony points to Amazon Time Sync service')
     # https://access.redhat.com/solutions/5132071
     # https://bugzilla.redhat.com/show_bug.cgi?id=1961156
     product_id = get_product_id(test_instance)
-    if float(product_id) < float('8.5'):
+    if float(product_id) < float('8.5') and float(product_id) > float('7.9'):
         run_cmd(test_instance, "sudo cat /etc/chrony.conf", expect_ret=0, expect_kw="#leapsectz right/UTC,#pool 2.rhel.pool.ntp.org iburst", msg='check no NTP leap smear incompatibilitye')
     else:
         run_cmd(test_instance, "sudo cat /etc/chrony.conf", expect_ret=0, expect_not_kw="leapsectz right/UTC,pool 2.rhel.pool.ntp.org iburst", msg='check no NTP leap smear incompatibilitye')
@@ -454,13 +456,22 @@ def test_stage1_check_instance_identity(test_instance):
     elif 'Access2' in aminame:
         # Cloud Access billing code, means don't charge for the OS (so it can apply to anything cloud Access)
         billingcodes = ['bp-63a5400a']
+    
+    elif 'Marketplace' in aminame:
+        if instance['billingProducts'] is not None:
+            test_instance.fail("billingProducts is not required in marketplace image: {}".format(instance['billingProducts']))
+        if instance.get('marketplaceProductCodes') is None:
+            test_instance.fail("marketplaceProductCodes is required in marketplace image:{}".format(instance.get('marketplaceProductCodes')))
     else:
         test_instance.skipTest('unable to decide billingcodes as no "Hourly2" and "Access2" found in AMI name')
-    for billingcode in billingcodes:
-        if billingcode not in instance['billingProducts']:
-            test_instance.fail("expected({}) not found in instance billingcode({})".format(billingcode, instance['billingProducts']))
-        else:
-            test_instance.log.info("expected({}) found in instance billingcode({}).".format(billingcode, instance['billingProducts']))
+    if 'Marketplace' not in aminame:
+        if instance.get('marketplaceProductCodes'):
+            test_instance.fail('Community AMIs should not have marketplaceProductCodes')
+        for billingcode in billingcodes:
+            if billingcode not in instance['billingProducts']:
+                test_instance.fail("expected({}) not found in instance billingcode({})".format(billingcode, instance['billingProducts']))
+            else:
+                test_instance.log.info("expected({}) found in instance billingcode({}).".format(billingcode, instance['billingProducts']))
 
 def test_stage1_check_nameserver(test_instance):
     '''
@@ -561,6 +572,13 @@ def test_stage1_check_numa(test_instance):
     else:
         test_instance.log.info("only 1 node found")
 
+def test_stage1_check_pkg_all(test_instance):
+    '''
+    list all installed pkgs
+    '''
+    cmd = "sudo rpm -qa"
+    run_cmd(test_instance, cmd, expect_ret=0, msg='list all pkgs installed')
+
 def test_stage1_check_pkg_signed(test_instance):
     '''
     check no pkg signature is none,
@@ -573,22 +591,24 @@ def test_stage1_check_pkg_signed(test_instance):
     else:
         gpg_pubkey_num = '2'
 
-    cmd = "sudo rpm -q gpg-pubkey|wc -l"
-    run_cmd(test_instance, cmd, expect_ret=0, expect_kw=gpg_pubkey_num, msg='check 2 gpg-pubkey installed')
     cmd = "sudo rpm -qa --qf '%{NAME}-%{VERSION}-%{RELEASE} %{SIGPGP:pgpsig}\n'|grep -v gpg-pubkey"
     run_cmd(test_instance, cmd, expect_ret=0, expect_not_kw='none', msg='check no pkg signature is none')
     cmd = "sudo rpm -qa --qf '%{NAME}-%{VERSION}-%{RELEASE} %{SIGPGP:pgpsig}\n'|grep -v gpg-pubkey|awk -F' ' '{print $NF}'|sort|uniq|wc -l"
     run_cmd(test_instance, cmd, expect_ret=0, expect_kw='1', msg='check use only one keyid')
+    cmd = "sudo rpm -q gpg-pubkey|wc -l"
+    run_cmd(test_instance, cmd, expect_ret=0, expect_kw=gpg_pubkey_num, msg='check {} gpg-pubkey installed'.format(gpg_pubkey_num))
 
 def test_stage1_check_pkg_unwanted(test_instance):
     '''
     Some pkgs are not required in ec2.
+    Unwanted list:
+    #rhbz: 2075815 qemu-guest-agent
     '''
     pkgs_unwanted = '''aic94xx-firmware,alsa-firmware,alsa-lib,alsa-tools-firmware,ivtv-firmware,iwl1000-firmware,
 iwl100-firmware,iwl105-firmware,iwl135-firmware,iwl2000-firmware,iwl2030-firmware,iwl3160-firmware,
 iwl3945-firmware,iwl4965-firmware,iwl5000-firmware,iwl5150-firmware,iwl6000-firmware,iwl6000g2a-firmware,
 iwl6000g2b-firmware,iwl6050-firmware,iwl7260-firmware,libertas-sd8686-firmware,libertas-sd8787-firmware,
-libertas-usb8388-firmware,firewalld,biosdevname,plymouth,iprutils'''.split(',')
+libertas-usb8388-firmware,firewalld,biosdevname,plymouth,iprutils,qemu-guest-agent'''.split(',')
     pkgs_unwanted = [ x.strip('\n') for x in pkgs_unwanted ]
     product_id = get_product_id(test_instance)
     if float(product_id) > float('8.3'):
@@ -596,6 +616,15 @@ libertas-usb8388-firmware,firewalld,biosdevname,plymouth,iprutils'''.split(',')
         pkgs_unwanted.append('rng-tools')
     if 'SAP' in test_instance.info['name']:
         pkgs_unwanted.remove('alsa-lib')
+        if float(product_id) >= float('8'):
+            test_instance.log.info("libpng12 is only wanted in RHEL-7 RHELDST-10710")
+            pkgs_unwanted.append('libpng12')
+        if float(product_id) >= float('9'):
+            test_instance.log.info("compat-sap-c++ is not wanted in RHEL-9+ RHELDST-10710")
+            pkgs_unwanted.append('compat-sap-c++-9')
+            pkgs_unwanted.append('compat-sap-c++-10')
+            pkgs_unwanted.append('compat-sap-c++-11')
+            pkgs_unwanted.append('compat-sap-c++-12')
     if 'HA' in test_instance.info['name']:
         pkgs_unwanted.append('rh-amazon-rhui-client')
     pkg_unexpected = []
@@ -613,7 +642,10 @@ def test_stage1_check_pkg_wanted(test_instance):
     https://kernel.googlesource.com/pub/scm/boot/dracut/dracut/+/18e61d3d41c8287467e2bc7178f32d188affc920%5E!/
     dracut-nohostonly -> dracut-config-generic
     dracut-norescue   -> dracut
-                      -> dracut-config-rescue 
+                      -> dracut-config-rescue
+    SAP:
+    ansible-core RHELDST-10710
+
     '''
     pkgs_wanted = '''kernel,yum-utils,redhat-release,redhat-release-eula,cloud-init,
 tar,rsync,dhcp-client,NetworkManager,NetworkManager-cloud-setup,cloud-utils-growpart,
@@ -627,9 +659,9 @@ gdisk,insights-client,dracut-config-generic,dracut-config-rescue,grub2-tools'''.
     if 'HA' in test_instance.info['name']:
         pkgs_wanted.extend(['fence-agents-all', 'pacemaker', 'pcs'])
     if 'SAP' in test_instance.info['name']:
-        pkgs_wanted.extend(['rhel-system-roles-sap', 'ansible'])
+        pkgs_wanted.extend(['rhel-system-roles-sap', 'ansible-core'])
         #BZ:1959813
-        pkgs_wanted.extend(['bind-utils', 'compat-sap-c++-9', 'nfs-utils', 'tcsh'])
+        pkgs_wanted.extend(['bind-utils', 'nfs-utils', 'tcsh'])
         #BZ:1959813
         pkgs_wanted.append('uuidd')
         #BZ: 1959923, 1961168
@@ -638,6 +670,10 @@ gdisk,insights-client,dracut-config-generic,dracut-config-rescue,grub2-tools'''.
         pkgs_wanted.extend(['numactl', 'PackageKit-gtk3-module', 'xorg-x11-xauth', 'libnsl'])
         #BZ:1959962
         pkgs_wanted.append('tuned-profiles-sap-hana')
+        if float(product_id) >= float('8'):
+            pkgs_wanted.remove('libpng12')
+        if float(product_id) <= float('9'):
+            pkgs_wanted.extend(['compat-sap-c++-9','compat-sap-c++-10'])
     if float(product_id) < float('8'):
         #For RHEL-7
         pkgs_wanted = '''kernel,yum-utils,cloud-init,dracut-config-generic,dracut-config-rescue,grub2,tar,rsync,chrony'''.split(',')
@@ -736,6 +772,10 @@ def test_stage1_check_sshd(test_instance):
         run_cmd(test_instance, cmd, expect_ret=0, msg='check if sshd active')
     cmd = 'sudo cat /etc/ssh/sshd_config'
     run_cmd(test_instance, cmd, expect_ret=0, expect_kw='PasswordAuthentication no', msg='check if password auth disabled')
+    cmd = "sudo grep -E -q '^PasswordAuthentication yes(.*)' /etc/ssh/sshd_config"
+    run_cmd(test_instance, cmd, expect_not_ret=0, msg='double check if password auth disabled')
+    cmd = "sudo grep -E -q '^PasswordAuthentication no' /etc/ssh/sshd_config"
+    run_cmd(test_instance, cmd, expect_ret=0, msg='double check if password auth disabled')
 
 def test_stage1_check_sysconfig_kernel(test_instance):
     '''
