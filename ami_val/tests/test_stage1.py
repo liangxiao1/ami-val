@@ -6,6 +6,7 @@ import re
 import glob
 import filecmp
 import difflib
+import datetime
 from ami_val.libs.utils_lib import run_cmd, is_arch, get_product_id, is_fedora, is_cmd_exist, getboottime
 
 def test_stage1_check_bash_history(test_instance):
@@ -20,7 +21,20 @@ def test_stage1_check_bootime_launch(test_instance):
     rhbz: 1862930
     '''
 
+    test_instance.tmp_data['BootTime'] = {''}
     boottime = getboottime(test_instance)
+    test_instance.tmp_data['BootTime'] = {'FirstLaunchTIme':boottime}
+    test_instance.tmp_data['BootTime']['ImageID'] = test_instance.vm.ami_id
+    test_instance.tmp_data['BootTime']['ImageName'] = test_instance.info['name']
+    test_instance.tmp_data['BootTime']['Release'] = test_instance.info['release'].get('version')
+    out = run_cmd(test_instance, 'uname -r', expect_ret=0, msg='get kernel version')
+    test_instance.tmp_data['BootTime']['KernelVersion'] = out.strip('\n')
+    test_instance.tmp_data['BootTime']['Region'] = test_instance.info.get('region')
+    out = run_cmd(test_instance, 'uname -i', expect_ret=0, msg='get arch')
+    test_instance.tmp_data['BootTime']['Arch'] = out.strip('\n')
+    test_instance.tmp_data['BootTime']['InstanceType'] = test_instance.vm.res_type
+    test_instance.tmp_data['BootTime']['Date'] = datetime.datetime.today().strftime('%Y-%m-%d')
+
     if float(boottime) > float(test_instance.params['max_boot_time']):
         test_instance.fail('boot time {} over expected {}'.format(boottime, test_instance.params['max_boot_time']))
     else:
@@ -630,7 +644,7 @@ libertas-usb8388-firmware,firewalld,biosdevname,plymouth,iprutils,qemu-guest-age
     pkg_unexpected = []
     for pkg in pkgs_unwanted:
         cmd = 'rpm -q {}'.format(pkg)
-        ret = run_cmd(test_instance, cmd, expect_not_ret=0, msg='check {} not installed'.format(pkg), ret_status=True)
+        ret = run_cmd(test_instance, cmd, msg='check {} not installed'.format(pkg), ret_status=True)
         if ret == 0:
             pkg_unexpected.append(pkg)
     if pkg_unexpected:
@@ -672,7 +686,7 @@ gdisk,insights-client,dracut-config-generic,dracut-config-rescue,grub2-tools'''.
         pkgs_wanted.append('tuned-profiles-sap-hana')
         if float(product_id) >= float('8'):
             pkgs_wanted.remove('libpng12')
-        if float(product_id) <= float('9'):
+        if float(product_id) < float('9'):
             pkgs_wanted.extend(['compat-sap-c++-9','compat-sap-c++-10'])
     if float(product_id) < float('8'):
         #For RHEL-7

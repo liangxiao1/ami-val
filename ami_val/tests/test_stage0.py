@@ -54,8 +54,9 @@ def test_stage0_launch_instance(test_instance):
     '''
     launch instances from AMIs in all supported regions
     '''
-    aws_lib.aws_check_region(region=test_instance.info['region'], profile=test_instance.profile_name, resource_file=test_instance.resource_file, log=test_instance.log)
+    aws_lib.aws_check_region(region=test_instance.info['region'], profile=test_instance.profile_name, resource_file=test_instance.resource_file, log=test_instance.log, tag=test_instance.tag)
     vm = resource_class.EC2VM(test_instance)
+    vm.instance_type = test_instance.instance_type
     if vm.create():
         test_instance.vm = vm
         test_instance.ssh_client = vm.new_ssh_client()

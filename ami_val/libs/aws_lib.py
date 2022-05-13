@@ -142,7 +142,7 @@ def aws_vpc_create(region, profile_name, tag, log=None):
     if sg == None:
         return vpc
 
-def aws_subnet_find(region, profile, create_new=True, log=None):
+def aws_subnet_find(region, profile, create_new=True, log=None, tag=None):
     '''
     if subnet enable public ipv4 on launch.
     return None or subnet id
@@ -152,7 +152,15 @@ def aws_subnet_find(region, profile, create_new=True, log=None):
     _, client = aws_init_key(region,profile=profile, log=log)
     subnet_id = None
     sg_id = None
-    subnets = client.describe_subnets()['Subnets']
+    find_kwargs = {}
+    if tag:
+        log.info("using tag in filter: {}".format(tag))
+        find_kwargs['Filters'] = [{'Name':'tag:Name', 'Values':[tag]}]
+    subnets = client.describe_subnets(**find_kwargs)['Subnets']
+    log.info("detected:{}".format(subnets))
+    if tag and not subnets:
+        raise Exception("Not found with tag:{}".format(tag))
+
     for subnet in subnets:
         log.info("checking subnet: {}".format(subnet))
         if subnet['MapPublicIpOnLaunch']:
@@ -445,7 +453,7 @@ def aws_find_region_missed(profile=None,resource_file=None, log=None):
     return missed_list, has_list
 
     
-def aws_check_all_regions(profile=None, is_paralle=True, log=None, resource_file=None):
+def aws_check_all_regions(profile=None, is_paralle=True, log=None, resource_file=None, tag=None):
     '''
     this func checks all regions has keypair required.
     and search subnet, sg to allow to create instance and make ssh connection
@@ -478,7 +486,7 @@ def aws_check_all_regions(profile=None, is_paralle=True, log=None, resource_file
     log.info("Searching proper subnet and security group in all regions......")
     if is_paralle:
         with concurrent.futures.ThreadPoolExecutor(max_workers=20) as executor:
-            all_jobs = {executor.submit(aws_subnet_find, region['RegionName'], profile=profile, create_new=False): region for region in region_list}
+            all_jobs = {executor.submit(aws_subnet_find, region['RegionName'], profile=profile, create_new=False, tag=tag): region for region in region_list}
             for r in concurrent.futures.as_completed(all_jobs, timeout=1200):
                 x = all_jobs[r]
                 try:
@@ -516,7 +524,7 @@ def aws_check_all_regions(profile=None, is_paralle=True, log=None, resource_file
     
     else:
         for region in region_list:
-            subnet_id, sg_id, region_name = aws_subnet_find(region=region['RegionName'], profile=profile, create_new=True)
+            subnet_id, sg_id, region_name = aws_subnet_find(region=region['RegionName'], profile=profile, create_new=True, tag=tag)
             #log.info('{} {} {}'.format(subnet_id, sg_id, region_name))
             utils_lib.save_resource(resource_file, region=region_name, subnet=subnet_id, sg=sg_id)
             _, instance_type_arm = aws_instance_type_find(region=region['RegionName'], profile=profile, arch='arm64')
@@ -525,7 +533,7 @@ def aws_check_all_regions(profile=None, is_paralle=True, log=None, resource_file
             utils_lib.save_resource(resource_file, region=region['RegionName'], arch='x86_64', instance_types_list=instance_type_x86)
 
 
-def aws_check_region(region=None, profile=None, log=None, resource_file=None):
+def aws_check_region(region=None, profile=None, log=None, resource_file=None, tag=None):
     '''
     this func checks all regions has keypair required.
     and search subnet, sg to allow to create instance and make ssh connection
@@ -542,7 +550,7 @@ def aws_check_region(region=None, profile=None, log=None, resource_file=None):
     log.info("Checking keypair exists in {}......".format(region))
     aws_import_key(region=region, profile=profile, keyname=keyname, pubkeyfile=pubkeyfile, log=log)
     log.info("Searching proper subnet and security group in {}......".format(region))
-    subnet_id, sg_id, region_name = aws_subnet_find(region=region, profile=profile, create_new=True, log=log)
+    subnet_id, sg_id, region_name = aws_subnet_find(region=region, profile=profile, create_new=True, log=log, tag=tag)
     #log.info('{} {} {}'.format(subnet_id, sg_id, region_name))
     utils_lib.save_resource(resource_file, region=region, subnet=subnet_id, sg=sg_id, log=log)
     _, instance_type_arm = aws_instance_type_find(region=region, profile=profile, arch='arm64', log=log)

@@ -5,6 +5,8 @@ import time
 import json
 from ami_val.libs.utils_lib import run_cmd, get_product_id, getboottime
 import ami_val
+from filelock import FileLock
+import csv
 
 def test_stage2_check_auditd(test_instance):
     """
@@ -68,28 +70,14 @@ def test_stage2_check_sap_security_limits(test_instance):
     '''
     if 'SAP' not in test_instance.info['name']:
         test_instance.skipTest('only run in SAP AMIs')
-    expected_cfg =  '@sapsys    hard    nofile   1048576,\
-@sapsys    soft    nofile   1048576,\
-@dba       hard    nofile   1048576,\
-@dba       soft    nofile   1048576,\
-@sapsys    hard    nproc    unlimited,\
-@sapsys    soft    nproc    unlimited,\
-@dba       hard    nproc    unlimited,\
-@dba       soft    nproc    unlimited'
-    expected_cfg1 = '@sapsys hard nofile 1048576,\
-@sapsys soft nofile 1048576,\
-@dba hard nofile 1048576,\
-@dba soft nofile 1048576,\
-@sapsys hard nproc unlimited,\
-@sapsys soft nproc unlimited,\
-@dba hard nproc unlimited,\
-@dba soft nproc unlimited'
-    cmd = 'sudo cat /etc/security/limits.d/99-sap.conf'
+    options = ['@sapsys hard nofile 1048576','@sapsys soft nofile 1048576',
+               '@dba hard nofile 1048576','@dba soft nofile 1048576',
+               '@sapsys hard nproc unlimited','@sapsys soft nproc unlimited',
+               '@dba hard nproc unlimited','@dba soft nproc unlimited']
+    
+    cmd = "sudo cat /etc/security/limits.d/99-sap.conf|awk -F' ' '{print($1,$2,$3,$4)}'"
     result = run_cmd(test_instance, cmd, msg='check /etc/security/limits.d/99-sap.conf')
-    if result[0:25] == '@sapsys hard nofile 1048576':
-        run_cmd(test_instance, cmd, expect_kw=expected_cfg1, msg='check /etc/security/limits.d/99-sap.conf')
-    else:
-        run_cmd(test_instance, cmd, expect_kw=expected_cfg, msg='check /etc/security/limits.d/99-sap.conf')
+    run_cmd(test_instance, cmd, expect_kw=','.join(options), msg='check /etc/security/limits.d/99-sap.conf')
 
 def test_stage2_check_sap_sysctl(test_instance):
     #bz: 1959962
@@ -171,6 +159,39 @@ def test_stage2_test_rebootime(test_instance):
     test_instance.vm.reboot()
     test_instance.ssh_client = test_instance.vm.new_ssh_client()
     boottime = getboottime(test_instance)
+    test_instance.tmp_data['BootTime']['RebootTime'] = boottime
+    if float(boottime) > float(test_instance.params['max_reboot_time']):
+        test_instance.fail('boot time {} over expected {}'.format(boottime, test_instance.params['max_reboot_time']))
+    else:
+        test_instance.log.info('boot time {} within expected {}'.format(boottime, test_instance.params['max_reboot_time']))
+
+def test_stage2_test_stop_start_bootime(test_instance):
+    '''
+    check reboot time after stop
+    can change pass criteria in cfg ami-val.yaml, default is 30s.
+    '''
+
+    test_instance.ssh_client.close()
+    test_instance.vm.stop()
+    test_instance.vm.start()
+    test_instance.ssh_client = test_instance.vm.new_ssh_client()
+    boottime = getboottime(test_instance)
+    test_instance.tmp_data['BootTime']['Stop-StartTime'] = boottime
+    test_instance.log.info(test_instance.tmp_data)
+    boottime_csv = test_instance.logdir + '/bootimes.csv'
+    test_instance.log.info("boot time data are saving to {}".format(boottime_csv))
+    csv_headers = ['Release','ImageID','ImageName','KernelVersion','Region','Arch','InstanceType','FirstLaunchTIme','RebootTime','Stop-StartTime','Comments','Date']
+    if not os.path.exists(boottime_csv):
+        with FileLock(boottime_csv + '.lock'):
+            test_instance.log.info("Create new {}".format(boottime_csv))
+            with open(boottime_csv, 'w+') as fh:
+                csv_data = csv.DictWriter(fh, csv_headers)
+                csv_data.writeheader()
+    with FileLock(boottime_csv + '.lock'):
+        with open(boottime_csv, 'a+') as fh:
+            csv_data = csv.DictWriter(fh, csv_headers)
+            csv_data.writerow(test_instance.tmp_data.get('BootTime'))
+
     if float(boottime) > float(test_instance.params['max_reboot_time']):
         test_instance.fail('boot time {} over expected {}'.format(boottime, test_instance.params['max_reboot_time']))
     else:

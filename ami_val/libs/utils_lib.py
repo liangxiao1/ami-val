@@ -531,7 +531,7 @@ def getboottime(test_instance):
     if 'min' in boot_time:
         boot_time_min = re.findall('[0-9]+min', boot_time)[0]
         boot_time_min = boot_time_min.strip('min')
-        boot_time_sec = int(boot_time_min) * 60 + decimal.Decimal(boot_time_sec).to_integral()
+        boot_time_sec = int(boot_time_min) * 60 + float(boot_time_sec)
     test_instance.log.info(
         "Boot time is {}(s)".format(boot_time_sec))
     return boot_time_sec

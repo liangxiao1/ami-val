@@ -70,6 +70,8 @@ class BaseTest():
         self.ssh_client = None
         self.resource_file = None
         self.resource_info = None
+        # store any tmp data
+        self.tmp_data = {}
 
     def load_resource(self):
         self.resource_file = self.logdir + '/resource.json'
@@ -141,6 +143,9 @@ class EC2VM():
         self.ssh_key_name = keys_data['pair_name']
         self.ssh_key_path = keys_data['ssh_keyfile']
         self.ssh_username = keys_data['ssh_user']
+        if 'ubuntu' in testinstance.info.get('name'):
+            testinstance.log.info('Ubuntu image, use ubuntu as default user')
+            self.ssh_username = 'ubuntu'
         self.ssh_conn = None
         self.__volume_id = None
         self.is_created = False
