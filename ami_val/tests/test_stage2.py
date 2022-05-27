@@ -80,7 +80,9 @@ def test_stage2_check_sap_security_limits(test_instance):
     run_cmd(test_instance, cmd, expect_kw=','.join(options), msg='check /etc/security/limits.d/99-sap.conf')
 
 def test_stage2_check_sap_sysctl(test_instance):
-    #bz: 1959962
+    '''
+    rhbz: 1959962
+    '''
     if 'SAP' not in test_instance.info['name']:
         test_instance.skipTest('only run in SAP AMIs')
     expected_cfg = 'kernel.pid_max = 4194304,vm.max_map_count = 2147483647'
@@ -93,7 +95,9 @@ def test_stage2_check_sap_sysctl(test_instance):
                 msg='check /etc/sysctl.d/sap.conf')
 
 def test_stage2_check_sap_tmpfiles(test_instance):
-    #bz: 1959979
+    '''
+    rhbz: 1959979
+    '''
     if 'SAP' not in test_instance.info['name']:
         test_instance.skipTest('only run in SAP AMIs')
     expected_cfg =  'x /tmp/.sap*,x /tmp/.hdb*lock,x /tmp/.trex*lock'
@@ -106,7 +110,9 @@ def test_stage2_check_sap_tmpfiles(test_instance):
                 msg='check /etc/tmpfiles.d/sap.conf')
 
 def test_stage2_check_sap_tuned(test_instance):
-    #bz: 1959962
+    '''
+    rhbz: 1959962
+    '''
     if 'SAP' not in test_instance.info['name']:
         test_instance.skipTest('only run in SAP AMIs')
     expected_cfg =  'sap-hana'

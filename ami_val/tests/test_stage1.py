@@ -44,11 +44,13 @@ def test_stage1_check_cds_hostnames(test_instance):
     '''
     check cds hostname
     '''
-    rhui_cds_hostnames = ["rhui2-cds01.{}.aws.ce.redhat.com".format(test_instance.info['region']),
-                          "rhui2-cds02.{}.aws.ce.redhat.com".format(test_instance.info['region']),
+    rhui_cds_hostnames = [
                           "rhui3-cds01.{}.aws.ce.redhat.com".format(test_instance.info['region']),
                           "rhui3-cds02.{}.aws.ce.redhat.com".format(test_instance.info['region']),
-                          "rhui3-cds03.{}.aws.ce.redhat.com".format(test_instance.info['region'])]
+                          "rhui3-cds03.{}.aws.ce.redhat.com".format(test_instance.info['region']),
+                          "rhui4-cds01.{}.aws.ce.redhat.com".format(test_instance.info['region']),
+                          "rhui4-cds02.{}.aws.ce.redhat.com".format(test_instance.info['region']),
+                          "rhui4-cds03.{}.aws.ce.redhat.com".format(test_instance.info['region'])]
     for cds in rhui_cds_hostnames:
         #there is no rhui in us-gov regions at all - all the content requests are redirected to closest standard regions
         cds_name = cds.replace('-gov','')
@@ -591,7 +593,7 @@ def test_stage1_check_pkg_all(test_instance):
     list all installed pkgs
     '''
     cmd = "sudo rpm -qa"
-    run_cmd(test_instance, cmd, expect_ret=0, msg='list all pkgs installed')
+    run_cmd(test_instance, cmd, expect_ret=0,timeout=120, msg='list all pkgs installed')
 
 def test_stage1_check_pkg_signed(test_instance):
     '''
@@ -610,7 +612,9 @@ def test_stage1_check_pkg_signed(test_instance):
     cmd = "sudo rpm -qa --qf '%{NAME}-%{VERSION}-%{RELEASE} %{SIGPGP:pgpsig}\n'|grep -v gpg-pubkey|awk -F' ' '{print $NF}'|sort|uniq|wc -l"
     run_cmd(test_instance, cmd, expect_ret=0, expect_kw='1', msg='check use only one keyid')
     cmd = "sudo rpm -q gpg-pubkey|wc -l"
-    run_cmd(test_instance, cmd, expect_ret=0, expect_kw=gpg_pubkey_num, msg='check {} gpg-pubkey installed'.format(gpg_pubkey_num))
+    out = run_cmd(test_instance, cmd, expect_ret=0, msg='check {} gpg-pubkey installed'.format(gpg_pubkey_num))
+    if int(out) < int(gpg_pubkey_num):
+        test_instance.fail("installed gpg_pubkey pkgs count {} lower than required {}".format(out, gpg_pubkey_num))
 
 def test_stage1_check_pkg_unwanted(test_instance):
     '''
