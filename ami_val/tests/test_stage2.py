@@ -82,32 +82,29 @@ def test_stage2_check_sap_security_limits(test_instance):
 def test_stage2_check_sap_sysctl(test_instance):
     '''
     rhbz: 1959962
+    kernel.pid_max = 4194304
+    vm.max_map_count = 2147483647
+    file path: /usr/lib/sysctl.d/sap.conf or /etc/sysctl.d/sap.conf
     '''
     if 'SAP' not in test_instance.info['name']:
         test_instance.skipTest('only run in SAP AMIs')
-    expected_cfg = 'kernel.pid_max = 4194304,vm.max_map_count = 2147483647'
-    result = run_cmd(test_instance, 'sudo find /etc/sysctl.d/sap.conf', msg='find /etc/sysctl.d/sap.conf')
-    if result != ' ':
-        run_cmd(test_instance, 'sudo cat /usr/lib/sysctl.d/sap.conf', expect_kw=expected_cfg,
-                msg='check /usr/lib/sysctl.d/sap.conf')
-    else:
-        run_cmd(test_instance, 'sudo cat /etc/sysctl.d/sap.conf', expect_kw=expected_cfg,
-                msg='check /etc/sysctl.d/sap.conf')
+    check_dict = {
+        "kernel.pid_max":"4194304",
+        "vm.max_map_count":"2147483647"
+    }
+    for k in check_dict.keys():
+        run_cmd(test_instance, 'sudo sysctl {}'.format(k), expect_kw=check_dict.get(k))
 
 def test_stage2_check_sap_tmpfiles(test_instance):
     '''
     rhbz: 1959979
+    file path: /usr/lib/tmpfiles.d/sap.conf or /etc/tmpfiles.d/sap.conf
     '''
     if 'SAP' not in test_instance.info['name']:
         test_instance.skipTest('only run in SAP AMIs')
     expected_cfg =  'x /tmp/.sap*,x /tmp/.hdb*lock,x /tmp/.trex*lock'
-    result = run_cmd(test_instance, 'sudo find /etc/tmpfiles.d/sap.conf', msg='find /etc/tmpfiles.d/sap.conf')
-    if result != ' ':
-        run_cmd(test_instance, 'sudo cat /usr/lib/tmpfiles.d/sap.conf', expect_kw=expected_cfg,
-                         msg='check /usr/lib/tmpfiles.d/sap.conf')
-    else:
-        run_cmd(test_instance, 'sudo cat /etc/tmpfiles.d/sap.conf', expect_kw=expected_cfg,
-                msg='check /etc/tmpfiles.d/sap.conf')
+    cmd = 'sudo cat /usr/lib/tmpfiles.d/sap.conf /etc/tmpfiles.d/sap.conf'
+    run_cmd(test_instance, cmd, expect_kw=expected_cfg)
 
 def test_stage2_check_sap_tuned(test_instance):
     '''
