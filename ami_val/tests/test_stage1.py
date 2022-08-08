@@ -72,8 +72,6 @@ def test_stage1_check_chrony_aws(test_instance):
     rhbz: 1679763 [RFE] AWS AMI - Add Amazon Timesync Service
     '''
     run_cmd(test_instance, "sudo cat /etc/chrony.conf", expect_ret=0, expect_kw='server 169.254.169.123', msg='check chrony points to Amazon Time Sync service')
-    # https://access.redhat.com/solutions/5132071
-    # https://bugzilla.redhat.com/show_bug.cgi?id=1961156
     product_id = get_product_id(test_instance)
     if float(product_id) < float('8.5'):
         run_cmd(test_instance, "sudo cat /etc/chrony.conf", expect_ret=0, expect_kw="#leapsectz right/UTC,#pool 2.rhel.pool.ntp.org iburst", msg='check no NTP leap smear incompatibilitye')
@@ -563,12 +561,15 @@ def test_stage1_check_pkg_signed(test_instance):
 def test_stage1_check_pkg_unwanted(test_instance):
     '''
     Some pkgs are not required in ec2.
+    rhbz#1888695 rng-tools
+    rhbz#2075815 qemu-guest-agent
+    rhbz#2064087 dracut-config-rescue
     '''
     pkgs_unwanted = '''aic94xx-firmware,alsa-firmware,alsa-lib,alsa-tools-firmware,ivtv-firmware,iwl1000-firmware,
 iwl100-firmware,iwl105-firmware,iwl135-firmware,iwl2000-firmware,iwl2030-firmware,iwl3160-firmware,
 iwl3945-firmware,iwl4965-firmware,iwl5000-firmware,iwl5150-firmware,iwl6000-firmware,iwl6000g2a-firmware,
 iwl6000g2b-firmware,iwl6050-firmware,iwl7260-firmware,libertas-sd8686-firmware,libertas-sd8787-firmware,
-libertas-usb8388-firmware,firewalld,biosdevname,plymouth,iprutils'''.split(',')
+libertas-usb8388-firmware,firewalld,biosdevname,plymouth,iprutils,qemu-guest-agent,dracut-config-rescue'''.split(',')
     pkgs_unwanted = [ x.strip('\n') for x in pkgs_unwanted ]
     product_id = get_product_id(test_instance)
     if float(product_id) > float('8.3'):
@@ -588,11 +589,10 @@ def test_stage1_check_pkg_wanted(test_instance):
     https://kernel.googlesource.com/pub/scm/boot/dracut/dracut/+/18e61d3d41c8287467e2bc7178f32d188affc920%5E!/
     dracut-nohostonly -> dracut-config-generic
     dracut-norescue   -> dracut
-                      -> dracut-config-rescue 
     '''
     pkgs_wanted = '''kernel,yum-utils,redhat-release,redhat-release-eula,cloud-init,
 tar,rsync,dhcp-client,NetworkManager,NetworkManager-cloud-setup,cloud-utils-growpart,
-gdisk,insights-client,dracut-config-generic,dracut-config-rescue,grub2-tools'''.split(',')
+gdisk,insights-client,dracut-config-generic,grub2-tools'''.split(',')
     pkgs_wanted = [ x.strip('\n') for x in pkgs_wanted ]
     product_id = get_product_id(test_instance)
     if float(product_id) < float('8.4'):
