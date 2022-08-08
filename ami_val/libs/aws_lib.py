@@ -69,12 +69,12 @@ def aws_vpc_sg_find(vpcid, region, profile_name, log=None):
         log.info("default sg get error: {}".format(str(error)))
         return None
     for sg in sgs:
+        log.info("checking security group: {}".format(sg))
+        log.info("ip permissions: {}".format(sg.ip_permissions))
         try:
-            sg = ec2.SecurityGroup(sg.id)
             ips = sg.ip_permissions
             for ip in ips:
                 ip_ranges = ip['IpRanges']
-                log.debug(ip_ranges)
                 for ip_range in ip_ranges:
                     if '0.0.0.0/0' in ip_range['CidrIp']:
                         log.info("found security group:{} vpc check pass!".format(sg.id))
@@ -110,7 +110,7 @@ def aws_vpc_create(region, profile_name, tag, log=None):
     try:
         vpc = ec2.Vpc(vpcid)
         log.info("vpc init {}".format(vpcid))
-        tag = vpc.create_tags(
+        vpc.create_tags(
             DryRun=False,
             Tags=[
                 {
@@ -129,20 +129,20 @@ def aws_vpc_create(region, profile_name, tag, log=None):
     except Exception as error:
         log.info(str(error))
         return False
-    igw = aws_igw_create(client, vpcid, tag)
+    igw = aws_igw_create(region, profile_name, vpcid, tag, log=log)
     if igw == None:
         return vpc
-    rt = aws_rt_update(client, vpc, igw, tag)
+    rt = aws_rt_update(region, profile_name, vpcid, igw.id, tag, log=log)
     if rt == None:
         return vpc
-    subnet = aws_subnet_create(client, vpc, tag)
+    subnet = aws_subnet_create(region, profile_name, vpcid, tag, log=log)
     if subnet == None:
         return vpc
-    sg = aws_sg_update(client, vpc, igw, tag)
+    sg = aws_sg_update(region, profile_name, vpcid,tag, log=log)
     if sg == None:
         return vpc
 
-def aws_subnet_find(region, profile, create_new=True, log=None):
+def aws_subnet_find(region, profile, create_new=True, log=None, tag=None):
     '''
     if subnet enable public ipv4 on launch.
     return None or subnet id
@@ -152,8 +152,17 @@ def aws_subnet_find(region, profile, create_new=True, log=None):
     _, client = aws_init_key(region,profile=profile, log=log)
     subnet_id = None
     sg_id = None
-    subnets = client.describe_subnets()['Subnets']
+    find_kwargs = {}
+    if tag:
+        log.info("using tag in filter: {}".format(tag))
+        find_kwargs['Filters'] = [{'Name':'tag:Name', 'Values':[tag]}]
+    subnets = client.describe_subnets(**find_kwargs)['Subnets']
+    log.info("detected:{}".format(subnets))
+    if tag and not subnets:
+        raise Exception("Not found with tag:{}".format(tag))
+
     for subnet in subnets:
+        log.info("checking subnet: {}".format(subnet))
         if subnet['MapPublicIpOnLaunch']:
             vpc_id = subnet['VpcId']
             sg_id = aws_vpc_sg_find(vpc_id, region, profile, log=log)
@@ -161,8 +170,8 @@ def aws_subnet_find(region, profile, create_new=True, log=None):
                 subnet_id = subnet['SubnetId']
                 break
     if subnet_id is None and create_new:
-        log.info("No ipv4 pub enabed subnets found in region {}".format(region))
-        vpc = aws_vpc_create(region, profile, 'virtqe')
+        log.info("No ipv4 pub enabled subnets found in region {}".format(region))
+        vpc = aws_vpc_create(region, profile, 'virtqe', log=log)
         subnets = client.describe_subnets()['Subnets']
         for subnet in subnets:
             if subnet['MapPublicIpOnLaunch']:
@@ -188,20 +197,23 @@ def aws_igw_create(region, profile, vpcid, tag, log=None):
         tag = default_tag
     try:
         igw_new = client.create_internet_gateway(
+            TagSpecifications=[
+                {
+                    'ResourceType': 'internet-gateway',
+                    'Tags': [
+                        {
+                            'Key': 'Name',
+                            'Value': tag
+                        },
+                    ]
+                },
+            ],
             DryRun=False
+            
         )
         igwid = igw_new['InternetGateway']['InternetGatewayId']
         log.info("New igw created {}".format(igwid))
         igw = ec2.InternetGateway(igwid)
-        igw.create_tags(
-            DryRun=False,
-            Tags=[
-                {
-                    'Key': 'Name',
-                    'Value': tag
-                },
-            ]
-        )
         igw.attach_to_vpc(
             DryRun=False,
             VpcId=vpcid
@@ -248,10 +260,11 @@ def aws_rt_update(region, profile, vpcid, igwid, tag, log=None):
             ]
         )
         log.info("tag added")
+        log.info("create route to {}".format(igwid))
         route = rt.create_route(
             DestinationCidrBlock='0.0.0.0/0',
             DryRun=False,
-            GatewayId=igw.id,
+            GatewayId=igwid,
         )
         return rt
     except Exception as err:
@@ -440,7 +453,7 @@ def aws_find_region_missed(profile=None,resource_file=None, log=None):
     return missed_list, has_list
 
     
-def aws_check_all_regions(profile=None, is_paralle=True, log=None, resource_file=None):
+def aws_check_all_regions(profile=None, is_paralle=True, log=None, resource_file=None, tag=None):
     '''
     this func checks all regions has keypair required.
     and search subnet, sg to allow to create instance and make ssh connection
@@ -473,7 +486,7 @@ def aws_check_all_regions(profile=None, is_paralle=True, log=None, resource_file
     log.info("Searching proper subnet and security group in all regions......")
     if is_paralle:
         with concurrent.futures.ThreadPoolExecutor(max_workers=20) as executor:
-            all_jobs = {executor.submit(aws_subnet_find, region['RegionName'], profile=profile, create_new=False): region for region in region_list}
+            all_jobs = {executor.submit(aws_subnet_find, region['RegionName'], profile=profile, create_new=False, tag=tag): region for region in region_list}
             for r in concurrent.futures.as_completed(all_jobs, timeout=1200):
                 x = all_jobs[r]
                 try:
@@ -511,7 +524,7 @@ def aws_check_all_regions(profile=None, is_paralle=True, log=None, resource_file
     
     else:
         for region in region_list:
-            subnet_id, sg_id, region_name = aws_subnet_find(region=region['RegionName'], profile=profile, create_new=False)
+            subnet_id, sg_id, region_name = aws_subnet_find(region=region['RegionName'], profile=profile, create_new=True, tag=tag)
             #log.info('{} {} {}'.format(subnet_id, sg_id, region_name))
             utils_lib.save_resource(resource_file, region=region_name, subnet=subnet_id, sg=sg_id)
             _, instance_type_arm = aws_instance_type_find(region=region['RegionName'], profile=profile, arch='arm64')
@@ -520,7 +533,7 @@ def aws_check_all_regions(profile=None, is_paralle=True, log=None, resource_file
             utils_lib.save_resource(resource_file, region=region['RegionName'], arch='x86_64', instance_types_list=instance_type_x86)
 
 
-def aws_check_region(region=None, profile=None, log=None, resource_file=None):
+def aws_check_region(region=None, profile=None, log=None, resource_file=None, tag=None):
     '''
     this func checks all regions has keypair required.
     and search subnet, sg to allow to create instance and make ssh connection
@@ -537,7 +550,7 @@ def aws_check_region(region=None, profile=None, log=None, resource_file=None):
     log.info("Checking keypair exists in {}......".format(region))
     aws_import_key(region=region, profile=profile, keyname=keyname, pubkeyfile=pubkeyfile, log=log)
     log.info("Searching proper subnet and security group in {}......".format(region))
-    subnet_id, sg_id, region_name = aws_subnet_find(region=region, profile=profile, create_new=False, log=log)
+    subnet_id, sg_id, region_name = aws_subnet_find(region=region, profile=profile, create_new=True, log=log, tag=tag)
     #log.info('{} {} {}'.format(subnet_id, sg_id, region_name))
     utils_lib.save_resource(resource_file, region=region, subnet=subnet_id, sg=sg_id, log=log)
     _, instance_type_arm = aws_instance_type_find(region=region, profile=profile, arch='arm64', log=log)

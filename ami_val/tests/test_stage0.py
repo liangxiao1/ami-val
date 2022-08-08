@@ -42,12 +42,21 @@ def test_stage0_check_ena_set_in_push(test_instance):
         else:
             test_instance.log.info('ena_support is enabled as expected in push task after RHEL-7.4, acutal: {}'.format(test_instance.info['ena_support']))
 
+def test_stage0_check_ena_set_in_cloud(test_instance):
+    '''
+    check if ena is actually enabled in cloud
+    '''
+    image = resource_class.EC2Image(test_instance)
+    if not image.is_ena_enabled():
+        test_instance.fail('ena not enabled')
+
 def test_stage0_launch_instance(test_instance):
     '''
     launch instances from AMIs in all supported regions
     '''
-    aws_lib.aws_check_region(region=test_instance.info['region'], profile=test_instance.profile_name, resource_file=test_instance.resource_file, log=test_instance.log)
+    aws_lib.aws_check_region(region=test_instance.info['region'], profile=test_instance.profile_name, resource_file=test_instance.resource_file, log=test_instance.log, tag=test_instance.tag)
     vm = resource_class.EC2VM(test_instance)
+    vm.instance_type = test_instance.instance_type
     if vm.create():
         test_instance.vm = vm
         test_instance.ssh_client = vm.new_ssh_client()

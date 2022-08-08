@@ -5,6 +5,8 @@ import time
 import json
 from ami_val.libs.utils_lib import run_cmd, get_product_id, getboottime
 import ami_val
+from filelock import FileLock
+import csv
 
 def test_stage2_check_auditd(test_instance):
     """
@@ -62,38 +64,52 @@ def test_stage2_check_libc6_xen_conf(test_instance):
     run_cmd(test_instance, 'sudo test -f /etc/ld.so.conf.d/libc6-xen.conf', expect_ret=1, msg='check for /etc/ld.so.conf.d/libc6-xen.conf absence on RHEL')
 
 def test_stage2_check_sap_security_limits(test_instance):
-    #bz: 1959963
+    '''
+    rhbz:1959963
+    RHELDST-10710
+    '''
     if 'SAP' not in test_instance.info['name']:
         test_instance.skipTest('only run in SAP AMIs')
-    expected_cfg =  '@sapsys    hard    nofile   65536,\
-@sapsys    soft    nofile   65536,\
-@dba       hard    nofile   65536,\
-@dba       soft    nofile   65536,\
-@sapsys    hard    nproc    unlimited,\
-@sapsys    soft    nproc    unlimited,\
-@dba       hard    nproc    unlimited,\
-@dba       soft    nproc    unlimited'
-    cmd = 'sudo cat /etc/security/limits.d/99-sap.conf'
-    run_cmd(test_instance, cmd, expect_kw=expected_cfg, msg='check /etc/security/limits.d/99-sap.conf')
+    options = ['@sapsys hard nofile 1048576','@sapsys soft nofile 1048576',
+               '@dba hard nofile 1048576','@dba soft nofile 1048576',
+               '@sapsys hard nproc unlimited','@sapsys soft nproc unlimited',
+               '@dba hard nproc unlimited','@dba soft nproc unlimited']
+    
+    cmd = "sudo cat /etc/security/limits.d/99-sap.conf|awk -F' ' '{print($1,$2,$3,$4)}'"
+    result = run_cmd(test_instance, cmd, msg='check /etc/security/limits.d/99-sap.conf')
+    run_cmd(test_instance, cmd, expect_kw=','.join(options), msg='check /etc/security/limits.d/99-sap.conf')
 
 def test_stage2_check_sap_sysctl(test_instance):
-    #bz: 1959962
+    '''
+    rhbz: 1959962
+    kernel.pid_max = 4194304
+    vm.max_map_count = 2147483647
+    file path: /usr/lib/sysctl.d/sap.conf or /etc/sysctl.d/sap.conf
+    '''
     if 'SAP' not in test_instance.info['name']:
         test_instance.skipTest('only run in SAP AMIs')
-    expected_cfg = 'kernel.pid_max = 4194304,vm.max_map_count = 2147483647'
-    cmd = 'sudo cat /etc/sysctl.d/sap.conf'
-    run_cmd(test_instance, cmd, expect_kw=expected_cfg, msg='check /etc/sysctl.d/sap.conf')
+    check_dict = {
+        "kernel.pid_max":"4194304",
+        "vm.max_map_count":"2147483647"
+    }
+    for k in check_dict.keys():
+        run_cmd(test_instance, 'sudo sysctl {}'.format(k), expect_kw=check_dict.get(k))
 
 def test_stage2_check_sap_tmpfiles(test_instance):
-    #bz: 1959979
+    '''
+    rhbz: 1959979
+    file path: /usr/lib/tmpfiles.d/sap.conf or /etc/tmpfiles.d/sap.conf
+    '''
     if 'SAP' not in test_instance.info['name']:
         test_instance.skipTest('only run in SAP AMIs')
     expected_cfg =  'x /tmp/.sap*,x /tmp/.hdb*lock,x /tmp/.trex*lock'
-    cmd = 'sudo cat /etc/tmpfiles.d/sap.conf'
-    run_cmd(test_instance, cmd, expect_kw=expected_cfg, msg='check /etc/tmpfiles.d/sap.conf')
+    cmd = 'sudo cat /usr/lib/tmpfiles.d/sap.conf /etc/tmpfiles.d/sap.conf'
+    run_cmd(test_instance, cmd, expect_kw=expected_cfg)
 
 def test_stage2_check_sap_tuned(test_instance):
-    #bz: 1959962
+    '''
+    rhbz: 1959962
+    '''
     if 'SAP' not in test_instance.info['name']:
         test_instance.skipTest('only run in SAP AMIs')
     expected_cfg =  'sap-hana'
@@ -146,6 +162,39 @@ def test_stage2_test_rebootime(test_instance):
     test_instance.vm.reboot()
     test_instance.ssh_client = test_instance.vm.new_ssh_client()
     boottime = getboottime(test_instance)
+    test_instance.tmp_data['BootTime']['RebootTime'] = boottime
+    if float(boottime) > float(test_instance.params['max_reboot_time']):
+        test_instance.fail('boot time {} over expected {}'.format(boottime, test_instance.params['max_reboot_time']))
+    else:
+        test_instance.log.info('boot time {} within expected {}'.format(boottime, test_instance.params['max_reboot_time']))
+
+def test_stage2_test_stop_start_bootime(test_instance):
+    '''
+    check reboot time after stop
+    can change pass criteria in cfg ami-val.yaml, default is 30s.
+    '''
+
+    test_instance.ssh_client.close()
+    test_instance.vm.stop()
+    test_instance.vm.start()
+    test_instance.ssh_client = test_instance.vm.new_ssh_client()
+    boottime = getboottime(test_instance)
+    test_instance.tmp_data['BootTime']['Stop-StartTime'] = boottime
+    test_instance.log.info(test_instance.tmp_data)
+    boottime_csv = test_instance.logdir + '/bootimes.csv'
+    test_instance.log.info("boot time data are saving to {}".format(boottime_csv))
+    csv_headers = ['Release','ImageID','ImageName','KernelVersion','Region','Arch','InstanceType','FirstLaunchTIme','RebootTime','Stop-StartTime','Comments','Date']
+    if not os.path.exists(boottime_csv):
+        with FileLock(boottime_csv + '.lock'):
+            test_instance.log.info("Create new {}".format(boottime_csv))
+            with open(boottime_csv, 'w+') as fh:
+                csv_data = csv.DictWriter(fh, csv_headers)
+                csv_data.writeheader()
+    with FileLock(boottime_csv + '.lock'):
+        with open(boottime_csv, 'a+') as fh:
+            csv_data = csv.DictWriter(fh, csv_headers)
+            csv_data.writerow(test_instance.tmp_data.get('BootTime'))
+
     if float(boottime) > float(test_instance.params['max_reboot_time']):
         test_instance.fail('boot time {} over expected {}'.format(boottime, test_instance.params['max_reboot_time']))
     else:

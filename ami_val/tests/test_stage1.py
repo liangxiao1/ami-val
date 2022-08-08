@@ -6,6 +6,7 @@ import re
 import glob
 import filecmp
 import difflib
+import datetime
 from ami_val.libs.utils_lib import run_cmd, is_arch, get_product_id, is_fedora, is_cmd_exist, getboottime
 
 def test_stage1_check_bash_history(test_instance):
@@ -20,7 +21,20 @@ def test_stage1_check_bootime_launch(test_instance):
     rhbz: 1862930
     '''
 
+    test_instance.tmp_data['BootTime'] = {''}
     boottime = getboottime(test_instance)
+    test_instance.tmp_data['BootTime'] = {'FirstLaunchTIme':boottime}
+    test_instance.tmp_data['BootTime']['ImageID'] = test_instance.vm.ami_id
+    test_instance.tmp_data['BootTime']['ImageName'] = test_instance.info['name']
+    test_instance.tmp_data['BootTime']['Release'] = test_instance.info['release'].get('version')
+    out = run_cmd(test_instance, 'uname -r', expect_ret=0, msg='get kernel version')
+    test_instance.tmp_data['BootTime']['KernelVersion'] = out.strip('\n')
+    test_instance.tmp_data['BootTime']['Region'] = test_instance.info.get('region')
+    out = run_cmd(test_instance, 'uname -i', expect_ret=0, msg='get arch')
+    test_instance.tmp_data['BootTime']['Arch'] = out.strip('\n')
+    test_instance.tmp_data['BootTime']['InstanceType'] = test_instance.vm.res_type
+    test_instance.tmp_data['BootTime']['Date'] = datetime.datetime.today().strftime('%Y-%m-%d')
+
     if float(boottime) > float(test_instance.params['max_boot_time']):
         test_instance.fail('boot time {} over expected {}'.format(boottime, test_instance.params['max_boot_time']))
     else:
@@ -30,11 +44,13 @@ def test_stage1_check_cds_hostnames(test_instance):
     '''
     check cds hostname
     '''
-    rhui_cds_hostnames = ["rhui2-cds01.{}.aws.ce.redhat.com".format(test_instance.info['region']),
-                          "rhui2-cds02.{}.aws.ce.redhat.com".format(test_instance.info['region']),
+    rhui_cds_hostnames = [
                           "rhui3-cds01.{}.aws.ce.redhat.com".format(test_instance.info['region']),
                           "rhui3-cds02.{}.aws.ce.redhat.com".format(test_instance.info['region']),
-                          "rhui3-cds03.{}.aws.ce.redhat.com".format(test_instance.info['region'])]
+                          "rhui3-cds03.{}.aws.ce.redhat.com".format(test_instance.info['region']),
+                          "rhui4-cds01.{}.aws.ce.redhat.com".format(test_instance.info['region']),
+                          "rhui4-cds02.{}.aws.ce.redhat.com".format(test_instance.info['region']),
+                          "rhui4-cds03.{}.aws.ce.redhat.com".format(test_instance.info['region'])]
     for cds in rhui_cds_hostnames:
         #there is no rhui in us-gov regions at all - all the content requests are redirected to closest standard regions
         cds_name = cds.replace('-gov','')
@@ -70,10 +86,12 @@ def test_stage1_check_cloudinit_cfg_no_wheel(test_instance):
 def test_stage1_check_chrony_aws(test_instance):
     '''
     rhbz: 1679763 [RFE] AWS AMI - Add Amazon Timesync Service
+    # https://access.redhat.com/solutions/5132071
+    # https://bugzilla.redhat.com/show_bug.cgi?id=1961156
     '''
     run_cmd(test_instance, "sudo cat /etc/chrony.conf", expect_ret=0, expect_kw='server 169.254.169.123', msg='check chrony points to Amazon Time Sync service')
     product_id = get_product_id(test_instance)
-    if float(product_id) < float('8.5'):
+    if float(product_id) < float('8.5') and float(product_id) > float('7.9'):
         run_cmd(test_instance, "sudo cat /etc/chrony.conf", expect_ret=0, expect_kw="#leapsectz right/UTC,#pool 2.rhel.pool.ntp.org iburst", msg='check no NTP leap smear incompatibilitye')
     else:
         run_cmd(test_instance, "sudo cat /etc/chrony.conf", expect_ret=0, expect_not_kw="leapsectz right/UTC,pool 2.rhel.pool.ntp.org iburst", msg='check no NTP leap smear incompatibilitye')
@@ -281,9 +299,13 @@ def test_stage1_check_grub(test_instance):
     - /boot/grub/menu.lst exists
     - /boot/grub/menu.lst is symlink for /boot/grub/grub.conf
     - hard drive is not (hd0,0) for paravirtual
-    Check grub2 config for el8,el8+:
+    Check grub2 config for el8:
     - boot with efi or legacy bios
-    - /boot/grub2/grubenv is symlink for /boot/efi/EFI/redhat/grubenv if boot with efi
+    - /boot/grub2/grubenv is a symlink for /boot/efi/EFI/redhat/grubenv if boot with efi
+    - /boot/grub2/grubenv is a file rather than a link if boot with legacy bios
+    Check grub2 config for el9:
+    - boot with efi or legacy bios
+    - /boot/grub2/grub.cfg exists and /boot/grub2/grubenv is a file if boot with efi
     - /boot/grub2/grubenv is a file rather than a link if boot with legacy bios
     '''
     product_id = get_product_id(test_instance)
@@ -299,9 +321,15 @@ def test_stage1_check_grub(test_instance):
         cmd = 'sudo ls /sys/firmware/efi'
         out = run_cmd(test_instance, cmd, msg='check if boot with efi')
         cmd = 'sudo readlink -e /boot/grub2/grubenv'
-        if 'No such file or directory' not in out:
-            run_cmd(test_instance, cmd, expect_ret=0, expect_kw="/boot/efi/EFI/redhat/grubenv",
-                msg='check /boot/grub2/grubenv is symlink for /boot/efi/EFI/redhat/grubenv')
+        if out and 'No such file' not in out:
+            if float(product_id) < float('9'):
+                run_cmd(test_instance, cmd, expect_ret=0, expect_kw="/boot/efi/EFI/redhat/grubenv",
+                        msg='check /boot/grub2/grubenv is symlink for /boot/efi/EFI/redhat/grubenv')
+            else:
+                run_cmd(test_instance, cmd, expect_ret=0, expect_kw="/boot/grub2/grubenv",
+                        msg='check /boot/grub2/grubenv is a file rather than a link')
+                run_cmd(test_instance, 'sudo ls /boot/grub2', expect_ret=0, expect_kw="grub.cfg",
+                        msg='check for grub.cfg')
         else:
             run_cmd(test_instance, cmd, expect_ret=0, expect_kw="/boot/grub2/grubenv",
                 msg='check /boot/grub2/grubenv is a file rather than a link')
@@ -315,6 +343,16 @@ def test_stage1_check_hosts(test_instance):
     expect_kws = '127.0.0.1   localhost localhost.localdomain localhost4 localhost4.localdomain4,::1         localhost localhost.localdomain localhost6 localhost6.localdomain6'
     cmd = "sudo cat /etc/hosts"
     run_cmd(test_instance, cmd, expect_ret=0, expect_kw=expect_kws, msg='check /etc/hosts')
+
+def test_stage1_check_hostkey_permissions(test_instance):
+    '''
+    bz:2013644
+    check ssh files permission set are correct.
+    '''
+    run_cmd(test_instance,
+            "ls -l /etc/ssh/{ssh_host_ecdsa_key,ssh_host_ed25519_key,ssh_host_rsa_key}",
+            expect_not_kw='-rw-------. 1 root root',
+            msg='check ssh files permission set are correct')
 
 def test_stage1_check_inittab(test_instance):
     '''
@@ -432,13 +470,22 @@ def test_stage1_check_instance_identity(test_instance):
     elif 'Access2' in aminame:
         # Cloud Access billing code, means don't charge for the OS (so it can apply to anything cloud Access)
         billingcodes = ['bp-63a5400a']
+    
+    elif 'Marketplace' in aminame:
+        if instance['billingProducts'] is not None:
+            test_instance.fail("billingProducts is not required in marketplace image: {}".format(instance['billingProducts']))
+        if instance.get('marketplaceProductCodes') is None:
+            test_instance.fail("marketplaceProductCodes is required in marketplace image:{}".format(instance.get('marketplaceProductCodes')))
     else:
         test_instance.skipTest('unable to decide billingcodes as no "Hourly2" and "Access2" found in AMI name')
-    for billingcode in billingcodes:
-        if billingcode not in instance['billingProducts']:
-            test_instance.fail("expected({}) not found in instance billingcode({})".format(billingcode, instance['billingProducts']))
-        else:
-            test_instance.log.info("expected({}) found in instance billingcode({}).".format(billingcode, instance['billingProducts']))
+    if 'Marketplace' not in aminame:
+        if instance.get('marketplaceProductCodes'):
+            test_instance.fail('Community AMIs should not have marketplaceProductCodes')
+        for billingcode in billingcodes:
+            if billingcode not in instance['billingProducts']:
+                test_instance.fail("expected({}) not found in instance billingcode({})".format(billingcode, instance['billingProducts']))
+            else:
+                test_instance.log.info("expected({}) found in instance billingcode({}).".format(billingcode, instance['billingProducts']))
 
 def test_stage1_check_nameserver(test_instance):
     '''
@@ -454,9 +501,9 @@ def test_stage1_check_network_driver(test_instance):
     if it is not a xen instance, ena should be used.
     '''
     if is_fedora(test_instance):
-        is_cmd_exist(test_instance, 'lspci')
+        is_cmd_exist(test_instance, 'lshw')
         is_cmd_exist(test_instance, 'ethtool')
-    cmd = 'sudo lspci'
+    cmd = 'sudo lshw -C network'
     pci_out = run_cmd(test_instance, cmd, expect_ret=0, msg='get pci devices')
     ethtool_cmd = 'sudo ethtool -i eth0'
     if 'ENA' in pci_out:
@@ -465,7 +512,7 @@ def test_stage1_check_network_driver(test_instance):
         run_cmd(test_instance, ethtool_cmd, expect_ret=0, expect_kw='ixgbevf', msg='check if eth0 is using ixgbevf driver')
     else:
         run_cmd(test_instance, ethtool_cmd, expect_ret=0, expect_kw='vif', msg='check if eth0 is using vif driver')
-    cmd = 'sudo lscpu'
+    cmd = 'lscpu'
     cpu_out = run_cmd(test_instance, cmd, expect_ret=0, msg='get cpu info')
     if 'Xen' not in cpu_out:
         run_cmd(test_instance, ethtool_cmd, expect_ret=0, expect_kw='ena', msg='ena must used in KVM, aarch64 and metal instances')
@@ -539,6 +586,13 @@ def test_stage1_check_numa(test_instance):
     else:
         test_instance.log.info("only 1 node found")
 
+def test_stage1_check_pkg_all(test_instance):
+    '''
+    list all installed pkgs
+    '''
+    cmd = "sudo rpm -qa"
+    run_cmd(test_instance, cmd, expect_ret=0,timeout=120, msg='list all pkgs installed')
+
 def test_stage1_check_pkg_signed(test_instance):
     '''
     check no pkg signature is none,
@@ -551,16 +605,19 @@ def test_stage1_check_pkg_signed(test_instance):
     else:
         gpg_pubkey_num = '2'
 
-    cmd = "sudo rpm -q gpg-pubkey|wc -l"
-    run_cmd(test_instance, cmd, expect_ret=0, expect_kw=gpg_pubkey_num, msg='check 2 gpg-pubkey installed')
     cmd = "sudo rpm -qa --qf '%{NAME}-%{VERSION}-%{RELEASE} %{SIGPGP:pgpsig}\n'|grep -v gpg-pubkey"
     run_cmd(test_instance, cmd, expect_ret=0, expect_not_kw='none', msg='check no pkg signature is none')
     cmd = "sudo rpm -qa --qf '%{NAME}-%{VERSION}-%{RELEASE} %{SIGPGP:pgpsig}\n'|grep -v gpg-pubkey|awk -F' ' '{print $NF}'|sort|uniq|wc -l"
     run_cmd(test_instance, cmd, expect_ret=0, expect_kw='1', msg='check use only one keyid')
+    cmd = "sudo rpm -q gpg-pubkey|wc -l"
+    out = run_cmd(test_instance, cmd, expect_ret=0, msg='check {} gpg-pubkey installed'.format(gpg_pubkey_num))
+    if int(out) < int(gpg_pubkey_num):
+        test_instance.fail("installed gpg_pubkey pkgs count {} lower than required {}".format(out, gpg_pubkey_num))
 
 def test_stage1_check_pkg_unwanted(test_instance):
     '''
     Some pkgs are not required in ec2.
+    Unwanted list:
     rhbz#1888695 rng-tools
     rhbz#2075815 qemu-guest-agent
     rhbz#2064087 dracut-config-rescue
@@ -577,11 +634,25 @@ libertas-usb8388-firmware,firewalld,biosdevname,plymouth,iprutils,qemu-guest-age
         pkgs_unwanted.append('rng-tools')
     if 'SAP' in test_instance.info['name']:
         pkgs_unwanted.remove('alsa-lib')
+        if float(product_id) >= float('8'):
+            test_instance.log.info("libpng12 is only wanted in RHEL-7 RHELDST-10710")
+            pkgs_unwanted.append('libpng12')
+        if float(product_id) >= float('9'):
+            test_instance.log.info("compat-sap-c++ is not wanted in RHEL-9+ RHELDST-10710")
+            pkgs_unwanted.append('compat-sap-c++-9')
+            pkgs_unwanted.append('compat-sap-c++-10')
+            pkgs_unwanted.append('compat-sap-c++-11')
+            pkgs_unwanted.append('compat-sap-c++-12')
     if 'HA' in test_instance.info['name']:
         pkgs_unwanted.append('rh-amazon-rhui-client')
+    pkg_unexpected = []
     for pkg in pkgs_unwanted:
         cmd = 'rpm -q {}'.format(pkg)
-        run_cmd(test_instance, cmd, expect_not_ret=0, msg='check {} not installed'.format(pkg))
+        ret = run_cmd(test_instance, cmd, msg='check {} not installed'.format(pkg), ret_status=True)
+        if ret == 0:
+            pkg_unexpected.append(pkg)
+    if pkg_unexpected:
+        test_instance.fail('found unexpected pkgs: {}'.format(pkg_unexpected))
 
 def test_stage1_check_pkg_wanted(test_instance):
     '''
@@ -589,6 +660,8 @@ def test_stage1_check_pkg_wanted(test_instance):
     https://kernel.googlesource.com/pub/scm/boot/dracut/dracut/+/18e61d3d41c8287467e2bc7178f32d188affc920%5E!/
     dracut-nohostonly -> dracut-config-generic
     dracut-norescue   -> dracut
+    SAP:
+    ansible-core RHELDST-10710
     '''
     pkgs_wanted = '''kernel,yum-utils,redhat-release,redhat-release-eula,cloud-init,
 tar,rsync,dhcp-client,NetworkManager,NetworkManager-cloud-setup,cloud-utils-growpart,
@@ -602,9 +675,9 @@ gdisk,insights-client,dracut-config-generic,grub2-tools'''.split(',')
     if 'HA' in test_instance.info['name']:
         pkgs_wanted.extend(['fence-agents-all', 'pacemaker', 'pcs'])
     if 'SAP' in test_instance.info['name']:
-        pkgs_wanted.extend(['rhel-system-roles-sap', 'ansible'])
+        pkgs_wanted.extend(['rhel-system-roles-sap', 'ansible-core'])
         #BZ:1959813
-        pkgs_wanted.extend(['bind-utils', 'compat-sap-c++-9', 'nfs-utils', 'tcsh'])
+        pkgs_wanted.extend(['bind-utils', 'nfs-utils', 'tcsh'])
         #BZ:1959813
         pkgs_wanted.append('uuidd')
         #BZ: 1959923, 1961168
@@ -613,13 +686,22 @@ gdisk,insights-client,dracut-config-generic,grub2-tools'''.split(',')
         pkgs_wanted.extend(['numactl', 'PackageKit-gtk3-module', 'xorg-x11-xauth', 'libnsl'])
         #BZ:1959962
         pkgs_wanted.append('tuned-profiles-sap-hana')
+        if float(product_id) >= float('8'):
+            pkgs_wanted.remove('libpng12')
+        if float(product_id) < float('9'):
+            pkgs_wanted.extend(['compat-sap-c++-9','compat-sap-c++-10'])
     if float(product_id) < float('8'):
         #For RHEL-7
-        pkgs_wanted = '''kernel,yum-utils,cloud-init,dracut-config-generic,dracut-norescue,grub2,tar,rsync,chrony'''.split(',')
+        pkgs_wanted = '''kernel,yum-utils,cloud-init,dracut-config-generic,dracut-config-rescue,grub2,tar,rsync,chrony'''.split(',')
         pkgs_wanted = [ x.strip('\n') for x in pkgs_wanted ]
+    missing_pkgs = []
     for pkg in pkgs_wanted:
         cmd = 'rpm -q {}'.format(pkg)
-        run_cmd(test_instance, cmd, expect_ret=0, msg='check {} installed'.format(pkg))
+        ret = run_cmd(test_instance, cmd, msg='check {} installed'.format(pkg), ret_status=True)
+        if ret != 0:
+            missing_pkgs.append(pkg)
+    if missing_pkgs:
+        test_instance.fail('missing {}'.format(missing_pkgs))
 
 def test_stage1_check_product_id(test_instance):
     '''
@@ -706,6 +788,10 @@ def test_stage1_check_sshd(test_instance):
         run_cmd(test_instance, cmd, expect_ret=0, msg='check if sshd active')
     cmd = 'sudo cat /etc/ssh/sshd_config'
     run_cmd(test_instance, cmd, expect_ret=0, expect_kw='PasswordAuthentication no', msg='check if password auth disabled')
+    cmd = "sudo grep -E -q '^PasswordAuthentication yes(.*)' /etc/ssh/sshd_config"
+    run_cmd(test_instance, cmd, expect_not_ret=0, msg='double check if password auth disabled')
+    cmd = "sudo grep -E -q '^PasswordAuthentication no' /etc/ssh/sshd_config"
+    run_cmd(test_instance, cmd, expect_ret=0, msg='double check if password auth disabled')
 
 def test_stage1_check_sysconfig_kernel(test_instance):
     '''

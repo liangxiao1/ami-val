@@ -75,6 +75,10 @@ def main():
                     help='aws credential profile name, default is default', required=False)
     parser.add_argument('--paralle', dest='is_paralle', action='store_true', default=False,
                     help='run tests in all regions in paralle', required=False)
+    parser.add_argument('--tag', dest='tag', default=None, action='store',
+                    help='option, filter resources(vpc, sg, subnet) by tag', required=False)
+    parser.add_argument('--instance', dest='instance_type', default=None, action='store',
+                    help='option, run test on specified instance type, eg. t3.small', required=False)
     args = parser.parse_args()
 
     signal.signal(signal.SIGHUP, sig_handler)
@@ -109,6 +113,7 @@ def main():
             amis_dict = json.load(fh)
         except json.decoder.JSONDecodeError as exc:
             print("Failed to load {}. Please check manually".format(amis_file))
+            print(exc)
             sys.exit(1)
         for ami in amis_dict:
             ts = resource_class.BaseTest()
@@ -129,6 +134,8 @@ def main():
                 ec2_profile = 'aws'
             if args.profile:
                 ec2_profile = args.profile
+            ts.tag = args.tag
+            ts.instance_type = args.instance_type
             ts.profile_name = ec2_profile
             ts.resource_file = resource_file
             ALL_TS.append(ts)
@@ -149,7 +156,6 @@ def main():
                             if ts.vm is not None:
                                 ts.vm.delete(wait=False)
         sys.exit(0)
-    #aws_lib.aws_check_all_regions(profile=ec2_profile, is_paralle=args.is_paralle, resource_file=resource_file)
     region_missed, region_uploaded = aws_lib.aws_find_region_missed(profile=ec2_profile, resource_file=resource_file)
     if not os.path.exists(sum_log):
         with open(sum_log, 'w+') as fh:
@@ -166,6 +172,7 @@ def main():
             ts.log.logfile = ts.debuglog
             ts.log.info("-"*80)
             ts.log.info("Code Repo: {}".format(ts.params['code_repo']))
+            ts.log.info("Code Version: {}".format(ami_val.__version__))
             ts.log.info("Case ID: {}".format(ts.casename))
             ts.log.info("Case Doc: {}".format(eval(ts.casename).__doc__))
             ts.log.info("Case Params:")
