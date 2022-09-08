@@ -447,7 +447,7 @@ for HAPKG in ${HAPKGS}; do
     fi
 done
 
-# Install awscli from pip
+# Remove awscli
 if [ ${RHELMAJOR} -ge 9 ]; then
     pip uninstall -y awscli
     deactivate
