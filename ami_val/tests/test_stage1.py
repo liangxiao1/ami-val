@@ -120,15 +120,15 @@ def test_stage1_check_cmdline_crashkernel(test_instance):
         run_cmd(test_instance, "sudo service kdump status")
         run_cmd(test_instance, "sudo cat /proc/cmdline", expect_ret=0, expect_not_kw='crashkernel', msg='crashkernel not required as xen kdump unsupported')
     else:
+        cmd = "sudo kdumpctl showmem"
+        run_cmd(test_instance, cmd, expect_ret=0, msg='list reserved memory')
         if float(product_id) < float('9'):
             expect_kw = 'crashkernel=auto'
+            run_cmd(test_instance, "sudo cat /proc/cmdline", expect_ret=0, expect_kw=expect_kw, msg='check crashkernel is enabled')
         else:
             # rhbz: 1942398
-            if is_arch(test_instance, arch='x86_64'):
-                expect_kw = 'crashkernel=1G-4G:192M,4G-64G:256M,64G-:512M'
-            else:
-                expect_kw = 'crashkernel=2G-:448M'
-        run_cmd(test_instance, "sudo cat /proc/cmdline", expect_ret=0, expect_kw=expect_kw, msg='check crashkernel is enabled')
+            expect_kw = 'crashkernel'
+            run_cmd(test_instance, "sudo cat /proc/cmdline", expect_ret=0, expect_kw=expect_kw, expect_not_kw='crashkernel=auto',msg='check crashkernel is enabled')
 
 def test_stage1_check_cmdline_ifnames(test_instance):
     '''
@@ -670,6 +670,9 @@ gdisk,insights-client,dracut-config-generic,grub2-tools'''.split(',')
     product_id = get_product_id(test_instance)
     if float(product_id) < float('8.4'):
         pkgs_wanted.remove('NetworkManager-cloud-setup')
+    if float(product_id) >= float('8.7') and float(product_id) != float('9.0'):
+        #COMPOSER-1804
+        pkgs_wanted.append('redhat-cloud-client-configuration')
     if float(product_id) < float('8.4') and float(product_id) >= float('8.0'):
         pkgs_wanted.append('rng-tools')
     if 'HA' in test_instance.info['name']:
