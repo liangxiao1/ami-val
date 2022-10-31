@@ -697,6 +697,9 @@ gdisk,insights-client,dracut-config-generic,grub2-tools'''.split(',')
         #For RHEL-7
         pkgs_wanted = '''kernel,yum-utils,cloud-init,dracut-config-generic,dracut-config-rescue,grub2,tar,rsync,chrony'''.split(',')
         pkgs_wanted = [ x.strip('\n') for x in pkgs_wanted ]
+        if float(product_id) == float('7.9'):
+            #RHELDST-14391
+            pkgs_wanted.append('redhat-cloud-client-configuration')
     missing_pkgs = []
     for pkg in pkgs_wanted:
         cmd = 'rpm -q {}'.format(pkg)
