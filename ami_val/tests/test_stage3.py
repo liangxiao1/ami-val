@@ -74,6 +74,8 @@ def test_stage3_test_subscription_manager_auto(test_instance):
     '''
     rhbz 8.4: 1932802, 1905398
     rhbz 7.9: 2077086, 2077085
+    If you linked the test account to customer portal bug auto-reg failed,
+    please attach test_stage1_check_instance_identity log if there is new region added.
     '''
     if 'ATOMIC' in test_instance.info['name'].upper():
         test_instance.skipTest('skip in Atomic AMIs')

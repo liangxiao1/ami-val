@@ -442,6 +442,8 @@ def test_stage1_check_instance_identity(test_instance):
     try to fetch instance identity from EC2 and compare with expectation
     '''
     aminame = test_instance.info['name']
+    cmd = 'curl -s http://169.254.169.254/latest/dynamic/instance-identity/rsa2048'
+    run_cmd(test_instance, cmd, expect_ret=0, msg='get instance identity rsa2048 data')
     cmd = 'curl -s http://169.254.169.254/latest/dynamic/instance-identity/document'
     output = run_cmd(test_instance, cmd, expect_ret=0, msg='get instance identity data')
     instance = json.loads(output)
