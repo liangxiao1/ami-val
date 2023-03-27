@@ -185,6 +185,19 @@ def test_stage1_check_cmdline_nouveau(test_instance):
     expect_kw='blacklist nouveau'
     run_cmd(test_instance, "sudo cat {}".format(file_check), expect_ret=0, expect_kw=expect_kw, msg='check "{}" in {}'.format(expect_kw, file_check))
 
+def test_stage1_check_cmdline_amdgpu(test_instance):
+    '''
+    rhbz: 2133260,2035699
+    jira: COMPOSER-1807
+    amdgpu should be disabled 8.7+,9.1+
+    '''
+    aminame = test_instance.info['name']
+    if 'RHEL-6' in aminame:
+        test_instance.skipTest('not required in el6')
+    file_check = '/usr/lib/modprobe.d/blacklist-amdgpu.conf'
+    expect_kw='blacklist amdgpu'
+    run_cmd(test_instance, "sudo cat {}".format(file_check), expect_ret=0, expect_kw=expect_kw, msg='check "{}" in {}'.format(expect_kw, file_check))
+
 def test_stage1_check_cmdline_nvme_io_timeout(test_instance):
     '''
     rhbz: 1732506
