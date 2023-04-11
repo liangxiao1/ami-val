@@ -46,6 +46,18 @@ def test_stage3_check_yum_repoinfo(test_instance):
     else:
         run_cmd(test_instance, cmd, expect_ret=0, expect_not_kw='Repo-pkgs          : 0', timeout=1200, msg='try to get repo info')
 
+def test_stage3_test_yum_package_install_kernel_debug(test_instance):
+    '''
+    rhbz: 2117700
+    kernel-debug, kernel-debug-devel matching current kernel version are avaiable in repo
+    '''
+    if 'ATOMIC' in test_instance.info['name'].upper():
+        test_instance.skipTest('skip in Atomic AMIs')
+    run_cmd(test_instance, "sudo yum clean all", expect_ret=0, timeout=180)
+    run_cmd(test_instance, "sudo yum repolist", expect_ret=0, timeout=1200)
+    run_cmd(test_instance, "sudo yum -y install install kernel-debug-devel-$(uname -r)", timeout=1200)
+    run_cmd(test_instance, "sudo yum -y install install kernel-debug-$(uname -r)", timeout=1200)
+
 def test_stage3_test_yum_package_install(test_instance):
     if 'ATOMIC' in test_instance.info['name'].upper():
         test_instance.skipTest('skip in Atomic AMIs')
