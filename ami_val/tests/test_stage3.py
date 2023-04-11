@@ -55,8 +55,8 @@ def test_stage3_test_yum_package_install_kernel_debug(test_instance):
         test_instance.skipTest('skip in Atomic AMIs')
     run_cmd(test_instance, "sudo yum clean all", expect_ret=0, timeout=180)
     run_cmd(test_instance, "sudo yum repolist", expect_ret=0, timeout=1200)
-    run_cmd(test_instance, "sudo yum -y install install kernel-debug-devel-$(uname -r)", timeout=1200)
-    run_cmd(test_instance, "sudo yum -y install install kernel-debug-$(uname -r)", timeout=1200)
+    run_cmd(test_instance, "sudo yum -y install install kernel-debug-devel-$(uname -r)", expect_ret=0, timeout=1200)
+    run_cmd(test_instance, "sudo yum -y install install kernel-debug-$(uname -r)", expect_ret=0, timeout=1200)
 
 def test_stage3_test_yum_package_install(test_instance):
     if 'ATOMIC' in test_instance.info['name'].upper():
