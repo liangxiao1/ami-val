@@ -877,3 +877,25 @@ def test_stage1_check_yum_plugins(test_instance):
     run_cmd(test_instance,cmd, expect_ret=0, expect_kw=expect_kw, msg='check yum product-id plugin is {}'.format(status))
     cmd = 'sudo cat /etc/yum/pluginconf.d/subscription-manager.conf'
     run_cmd(test_instance,cmd, expect_ret=0, expect_kw=expect_kw, msg='check yum subscription-manager plugin is {}'.format(status))
+
+def test_stage1_check_rhui_certificate_date(test_instance):
+    '''
+    Check the cert key is not expired
+    '''
+    if 'ATOMIC' in test_instance.info['name'].upper():
+        test_instance.skipTest('skip run in Atomic AMIs')
+    if is_fedora(test_instance):
+        test_instance.skipTest('skip run in Fedora AMIs')
+    cmd = "rpm -qa *rhui*"
+    out = run_cmd(test_instance, cmd, expect_ret=0, msg='get rhui pkgs')
+    if not out:
+        test_instance.skipTest('no rhui pkg found')
+    for pkg in out.split('\n'):
+        if not pkg:
+            continue
+        pkg_files = run_cmd(test_instance, 'rpm -ql {}|grep crt'.format(pkg), expect_ret=0, msg='get rhui cert files')
+        for cert_file in pkg_files.split('\n'):
+            if not cert_file:
+                continue
+            cmd = "sudo bash -c 'openssl x509 -noout -in {} -enddate  -checkend 0'".format(cert_file)
+            run_cmd(test_instance, cmd, expect_ret=0, msg='check cert file is not expired')
