@@ -47,8 +47,18 @@ def test_stage0_check_ena_set_in_cloud(test_instance):
     check if ena is actually enabled in cloud
     '''
     image = resource_class.EC2Image(test_instance)
-    if not image.is_ena_enabled():
-        test_instance.fail('ena not enabled')
+    test_instance.log.info("Details:{}".format(json.dumps(test_instance.info, indent=4)))
+    aminame = test_instance.info['name']
+    if aminame.startswith(('RHEL-6','RHEL-7.0','RHEL-7.1','RHEL-7.2','RHEL-7.3')):
+        if image.is_ena_enabled():
+            test_instance.fail('ena should not be enabled earlier than RHEL-7.4')
+        else:
+            test_instance.log.info('ena is not enabled earlier than RHEL-7.4')
+    else:
+        if not image.is_ena_enabled():
+            test_instance.fail('ena should be enabled after RHEL-7.3')
+        else:
+            test_instance.log.info('ena is enabled as expected after RHEL7.3')
 
 def test_stage0_launch_instance(test_instance):
     '''
