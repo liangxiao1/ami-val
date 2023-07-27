@@ -141,6 +141,9 @@ def test_stage2_test_rebootime(test_instance):
     can change pass criteria in cfg ami-val.yaml, default is 30s.
     '''
 
+    aminame = test_instance.info['name']
+    if aminame.startswith('RHEL-6'):
+        test_instance.skipTest('no systemd-analyze in el6')
     test_instance.ssh_client.close()
     test_instance.vm.reboot()
     test_instance.ssh_client = test_instance.vm.new_ssh_client()
@@ -157,6 +160,9 @@ def test_stage2_test_stop_start_bootime(test_instance):
     can change pass criteria in cfg ami-val.yaml, default is 30s.
     '''
 
+    aminame = test_instance.info['name']
+    if aminame.startswith('RHEL-6'):
+        test_instance.skipTest('no systemd-analyze in el6')
     test_instance.ssh_client.close()
     test_instance.vm.stop()
     test_instance.vm.start()

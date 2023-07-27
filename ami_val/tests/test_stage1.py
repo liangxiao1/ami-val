@@ -21,6 +21,9 @@ def test_stage1_check_bootime_launch(test_instance):
     rhbz: 1862930
     '''
 
+    aminame = test_instance.info['name']
+    if aminame.startswith('RHEL-6'):
+        test_instance.skipTest('no systemd-analyze in el6')
     test_instance.tmp_data['BootTime'] = {''}
     boottime = getboottime(test_instance)
     test_instance.tmp_data['BootTime'] = {'FirstLaunchTIme':boottime}
