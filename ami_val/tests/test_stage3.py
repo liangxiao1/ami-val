@@ -18,9 +18,14 @@ def test_stage3_check_selinux(test_instance):
     '''
     out = run_cmd(test_instance, 'uname -r', msg='get kernel version')
     if 'SAP' in test_instance.info['name']:
+        # https://issues.redhat.com/browse/RHEL-11791
+        # selinux is disabled in sap RHEL-7
         test_instance.log.info('SAP AMIs found')
-        run_cmd(test_instance, 'sudo getenforce',expect_kw='Permissive', msg='check selinux current mode is Permissive(rhbz1960628)')
-        run_cmd(test_instance, 'sudo cat /etc/sysconfig/selinux',expect_kw='SELINUX=permissive,SELINUXTYPE=targeted', msg='check selinux current setting')
+        if 'el7' in out:
+            run_cmd(test_instance, 'sudo cat /etc/sysconfig/selinux',expect_kw='SELINUX=disabled,SELINUXTYPE=targeted', msg='check selinux current setting: RHEL-11791')
+        else:
+            run_cmd(test_instance, 'sudo getenforce',expect_kw='Permissive', msg='check selinux current mode is Permissive(rhbz1960628)')
+            run_cmd(test_instance, 'sudo cat /etc/sysconfig/selinux',expect_kw='SELINUX=permissive,SELINUXTYPE=targeted', msg='check selinux current setting')
         if 'el7' not in out and 'el6' not in out:
             # el7 and el6 do not have setenforce installed by default, do not try to change its setting
             run_cmd(test_instance, 'sudo setenforce Enforcing && getenforce',expect_kw='Enforcing', msg='try to change to enforcing mode')

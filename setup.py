@@ -23,7 +23,7 @@ setuptools.setup(
     },
     include_package_data=True,
     #data_files=[('/'+os.path.expanduser("~"), ['cfg/os-tests.yaml']),],
-    install_requires=['PyYAML', 'tipset >= 0.0.12', 'filelock', 'awscli', 'boto3', 'paramiko-fork', 'Jinja2'],
+    install_requires=['PyYAML', 'tipset >= 0.0.12', 'filelock', 'awscli', 'boto3', 'paramiko', 'Jinja2'],
     license="GPLv3+",
     classifiers=[
         'License :: OSI Approved :: GNU General Public License v3 or later (GPLv3+)',
